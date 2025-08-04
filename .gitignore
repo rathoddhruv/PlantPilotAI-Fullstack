@@ -18,6 +18,11 @@ Thumbs.db
 .vscode/
 *.code-workspace
 
+# === Backend cache ===
+BE/__pycache__/
+BE/routers/__pycache__/
+BE/services/__pycache__/
+
 # === Data & Label folders (ML) ===
 ml/data/
 ml/active_labels/
@@ -28,7 +33,7 @@ ml/runs/active_review_output/
 ml/temp/ls_extract/
 ml/label_studio_exports/
 
-# Allow important YAML config files
+# Allow important YAML config files in ML folder
 !ml/data/yolo_merged.yaml
 !ml/yolo_merged.yaml
 !ml/custom_train.yaml
