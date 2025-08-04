@@ -1,0 +1,69 @@
+# === Python cache and build ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.log
+*.tmp
+
+# === Virtual environments ===
+.venv/
+venv/
+venv311/
+
+# === OS & Editor files ===
+.DS_Store
+Thumbs.db
+.vscode/
+*.code-workspace
+
+# === Data & Label folders (ML) ===
+ml/data/
+ml/active_labels/
+ml/wrong_labels/
+ml/active_review/
+ml/flattened_images/
+ml/runs/active_review_output/
+ml/temp/ls_extract/
+ml/label_studio_exports/
+
+# Allow important YAML config files
+!ml/data/yolo_merged.yaml
+!ml/yolo_merged.yaml
+!ml/custom_train.yaml
+!ml/yolo_dataset.yaml
+
+# === YOLO training outputs ===
+ml/runs/**/*
+!ml/runs/detect/
+!ml/runs/detect/**/
+!ml/runs/detect/**/best.pt
+
+# === YOLO experiments to keep ===
+!ml/YOLO11-obb/
+!ml/YOLO11-obb/**/weights/
+!ml/YOLO11-obb/**/args.yaml
+!ml/YOLO11-obb/**/labels.jpg
+
+# === PyTorch checkpoints ===
+*.pt
+!ml/yolov8n-seg.pt
+
+# === Label Studio or export files ===
+*.csv
+*.json
+*.xml
+*.weights
+*.zip
+
+# === Ignore output images from review/predict ===
+*.jpg
+*.jpeg
+*.png
+
+# Keep YOLO11 experiment images
+!ml/YOLO11-obb/
+!ml/YOLO11-obb/**/
+!ml/YOLO11-obb/**/args.yaml
+!ml/YOLO11-obb/**/labels.jpg

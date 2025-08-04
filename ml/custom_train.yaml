@@ -1,0 +1,32 @@
+# custom_train.yaml — YOLOv8 training config with high-res + realistic augmentation
+
+# what task and mode you're running
+task: detect          # detection task (as opposed to segmentation, classification, etc.)
+mode: train           # training mode
+
+# model and dataset info
+# model: yolov8l.pt     # large model for better accuracy (use yolov8s.pt for Jetson or low-VRAM)
+data: yolo_merged.yaml  # path to your dataset config file
+
+# training strategy
+imgsz: 1280           # image input size during training (should match prediction size too)
+epochs: 50           # total training epochs
+batch: 8              # number of images per batch (adjust if you run out of GPU memory)
+device: 0             # use GPU 0 (your RTX 3090)
+patience: 40          # early stopping: if val loss doesn't improve for X epochs, stop
+
+# COLOR augmentations (teaches model to be robust to lighting & color changes)
+hsv_h: 0.01          # random hue shift (good for plants in varying light)
+hsv_s: 0.5            # random saturation shift
+hsv_v: 0.3            # random brightness shift
+
+# # GEOMETRIC augmentations (adds slight distortion to simulate real camera angles)
+degrees: 5           # random rotation up to ±10 degrees
+translate: 0.05        # shift image up/down/left/right by 10% of its size
+scale: 0.3            # random zoom in/out (50% scaling range)
+shear: 0.05            # shear the image (like slanting edges)
+perspective: 0.0005    # slight 3D effect to simulate tilt
+
+# FLIPPING (adds image variation from other angles)
+# flipud: 0.3           # flip vertically with 30% chance
+# fliplr: 0.4           # flip horizontally with 40% chance

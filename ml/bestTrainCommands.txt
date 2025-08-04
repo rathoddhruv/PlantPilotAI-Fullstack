@@ -1,0 +1,27 @@
+yolo task=detect mode=train model=yolov8s.pt data=yolo_merged.yaml imgsz=960 epochs=50 device=0 cfg=custom_train.yaml
+
+yolo task=detect mode=train model=yolov8s.pt data=yolo_merged.yaml imgsz=1280 epochs=50 device=0
+
+what i learn is for this 2 flower D and H, yolov8s is working fine and obj detection with B_box
+
+
+=============
+
+1. when selct image bounding box in label studeo , add classes and label 
+2. export with YOLOv8 OBB with Images
+image segmentation
+object detection
+YOLOv8 OBB format with images downloaded.
+
+3. export directly copy and pase in data\yolo_merged
+4. run python convert_to_yolo.py
+5. run yolo task=detect mode=train model=yolov8s.pt data=yolo_merged.yaml imgsz=960 epochs=50 device=0 cfg=custom_train.yaml
+6. detect result with :  DETECT
+yolo task=detect mode=predict model=runs/detect/train2/weights/best.pt source=data/yolo_merged/images/val imgsz=960 conf=0.2 device=0
+
+7. for refine more with active elarning : run python active_learning_label.py (with some new images, have to set path in config wher these new image is are )
+use terminal and review image one by one, yuo can use owen image editor or viewerr by giveing that path 
+8 python boost_merge_labels.py
+9. 
+
+
