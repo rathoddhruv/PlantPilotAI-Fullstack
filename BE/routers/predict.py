@@ -8,17 +8,15 @@ import shutil
 
 router = APIRouter()
 
-# Folders
 UPLOAD_DIR = Path("../ml/data/test_images").resolve()
 LABEL_STUDIO_DIR = Path("../ml/label_studio_exports").resolve()
-
 
 @router.post("/upload")
 async def upload_files(file: UploadFile = File(...)):
     """
-    Accepts either:
-    - An image (goes to test_images/)
-    - A ZIP of a Label Studio YOLO export (goes to label_studio_exports/)
+    Accepts:
+    - Image → saved to test_images/
+    - Label Studio ZIP export → saved to label_studio_exports/ and imported immediately
     """
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     LABEL_STUDIO_DIR.mkdir(parents=True, exist_ok=True)
@@ -30,27 +28,14 @@ async def upload_files(file: UploadFile = File(...)):
         else (UPLOAD_DIR / file.filename)
     )
 
-    if file_ext == "zip":
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        result = import_labelstudio_export(file_path)
-        return {"status": "uploaded", "type": "labelstudio_zip", "result": result}
-
-    # handle non-zip images
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+
+    if file_ext == "zip":
+        result = import_labelstudio_export(file_path)  # pass actual ZIP path
+        return {"status": "uploaded", "type": "labelstudio_zip", "result": result}
+
     return {"status": "uploaded", "type": "image"}
-
-
-@router.post("/import-labelstudio")
-def import_labelstudio():
-    """
-    Runs the Label Studio → YOLO dataset import process.
-    This will populate data/yolo_dataset with images + labels from the latest ZIP.
-    """
-    result = import_labelstudio_export(LABEL_STUDIO_DIR)
-    return result
-
 
 @router.post("/run-pipeline")
 def run_pipeline(
@@ -58,7 +43,6 @@ def run_pipeline(
 ):
     """
     Runs the full active learning pipeline.
-    Mode and confidence_threshold are passed as environment variables.
     """
     result = run_active_learning_pipeline(
         mode=mode, confidence_threshold=confidence_threshold
