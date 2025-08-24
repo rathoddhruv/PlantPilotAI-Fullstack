@@ -1,17 +1,14 @@
 import subprocess
-from pathlib import Path
 import os
-
-ML_DIR = Path("../ml").resolve()
-ML_SCRIPT = ML_DIR / "active_learning_pipeline.py"
-IMPORT_SCRIPT = ML_DIR / "import_yolo_dataset_from_zip.py"
+from pathlib import Path
+from settings import ML_DIR, ML_PIPELINE, IMPORT_ZIP_SCRIPT
 
 def import_labelstudio_export(zip_path: Path):
-    """Run Label Studio YOLO import script for the given ZIP file."""
+    """run the yolo dataset import script for a given ZIP file path"""
     try:
         result = subprocess.run(
-            ["python", str(IMPORT_SCRIPT)],
-            cwd=ML_DIR,
+            ["python", str(IMPORT_ZIP_SCRIPT)],
+            cwd=ML_DIR,                                  # run inside ml/
             env={**os.environ, "ZIP_PATH": str(zip_path)},
             capture_output=True,
             text=True,
@@ -22,15 +19,15 @@ def import_labelstudio_export(zip_path: Path):
         return {"status": "error", "error": e.stderr}
 
 def run_active_learning_pipeline(mode="active_learning", confidence_threshold=0.25):
-    """Runs the main active learning pipeline."""
+    """kick off the main pipeline with env overrides"""
     env = os.environ.copy()
     env["PIPELINE_MODE"] = mode
     env["UNCERTAIN_THRESHOLD"] = str(confidence_threshold)
 
     try:
         result = subprocess.run(
-            ["python", str(ML_SCRIPT)],
-            cwd=ML_DIR,
+            ["python", str(ML_PIPELINE)],
+            cwd=ML_DIR,                    # run inside ml/
             env=env,
             capture_output=True,
             text=True,
