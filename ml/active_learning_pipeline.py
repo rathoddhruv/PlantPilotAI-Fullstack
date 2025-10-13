@@ -3,26 +3,72 @@ import sys
 import shutil
 import subprocess
 import argparse
+import json
 from pathlib import Path
 from datetime import datetime
 from config_loader import (
-    YOLO_DATASET_YAML,
     MODEL_PATH as CONFIG_MODEL_PATH,
     MERGED_DATASET_ROOT,
 )
 
+
+def _archive_existing_train():
+    """move current runs/detect/train into runs/detect/archive/train_<timestamp>"""
+    runs_root = Path("runs") / "detect"
+    train_dir = runs_root / "train"
+    if not train_dir.exists():
+        return None
+    archive = runs_root / "archive"
+    archive.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dst = archive / f"train_{ts}"
+    shutil.move(str(train_dir), str(dst))
+    print(f"archived previous train to: {dst}")
+    return dst
+
+
+def _manifest_append(event: str, extra: dict):
+    """append a small record to runs/detect/manifest.json; never fail the pipeline"""
+    try:
+        runs_detect = Path("runs") / "detect"
+        runs_detect.mkdir(parents=True, exist_ok=True)
+        mf = runs_detect / "manifest.json"
+        data = []
+        if mf.exists():
+            try:
+                data = json.loads(mf.read_text(encoding="utf-8"))
+                if not isinstance(data, list):
+                    data = []
+            except Exception:
+                data = []
+        rec = {"event": event, "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")}
+        rec.update(extra or {})
+        mf.write_text(json.dumps([*data, rec], indent=2), encoding="utf-8")
+    except Exception:
+        pass  # do not break training if manifest fails
+
+
 print("=== STARTING ACTIVE LEARNING PIPELINE ===")
 
-# === CLI ARGS ===
+# lock cwd to this ml folder so relative paths never jump to an old repo
+THIS_DIR = Path(__file__).resolve().parent
+os.chdir(THIS_DIR)
+
+# absolute yaml paths avoid accidental cross-repo references
+YOLO_DATASET_YAML_ABS = str((THIS_DIR / "yolo_dataset.yaml").resolve())
+YOLO_MERGED_YAML_ABS = str((THIS_DIR / "yolo_merged.yaml").resolve())
+
+# === CLI args ===
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--clean", action="store_true", help="Clean dataset folders before pipeline"
 )
 args = parser.parse_args()
 
-# === STEP 0.5: Train Model FROM LABEL STUDIO ===
+# === Step 0.5: Handle initial training from Label Studio dataset ===
+# if original dataset is present, train once, then rename folder to avoid retraining
 dataset_root = Path("data/yolo_merged")
-dataset_yaml = "yolo_merged.yaml"
+dataset_yaml = YOLO_MERGED_YAML_ABS
 
 initial_images = Path("data/yolo_dataset/images/train")
 initial_labels = Path("data/yolo_dataset/labels/train")
@@ -30,47 +76,71 @@ initial_labels = Path("data/yolo_dataset/labels/train")
 valid_initial_labels = [f for f in initial_labels.glob("*.txt") if f.stat().st_size > 0]
 if any(initial_images.glob("*")) and valid_initial_labels:
     print(
-        "📦 Detected initial Label Studio dataset. Training from yolo_dataset directly..."
+        "Detected initial Label Studio dataset. Training from yolo_dataset directly..."
     )
 
-    dataset_yaml = "yolo_dataset.yaml"
+    dataset_yaml = YOLO_DATASET_YAML_ABS  # use absolute yaml path
 
+    # remove leftover backup labels if any
     for txt_file in initial_labels.glob("*.bak"):
         txt_file.unlink()
 
-    print("🚀 Starting YOLO training with initial dataset...")
+    # always write artifacts to a stable folder under ml/runs/detect/train
+    _archive_existing_train()  # move previous 'train' to archive if it exists
+
+    print("Starting YOLO training with initial dataset...")
     train_args = [
         "yolo",
         "task=detect",
         "mode=train",
         "model=yolov8s.pt",
-        f"data={YOLO_DATASET_YAML}",
+        f"data={dataset_yaml}",  # <-- FIX: use dataset_yaml (abs path)
         "imgsz=960",
         "device=0",
-        "name=train",
+        "project=runs/detect",  # stable root
+        "name=train",  # always 'train'
+        "exist_ok=True",
         "resume=False",
         "val=False",
         "epochs=50",
     ]
-    subprocess.run(train_args)
+    proc = subprocess.run(train_args, capture_output=True, text=True)
+    if proc.returncode != 0:
+        print("YOLO initial training failed")
+        print(proc.stderr or proc.stdout)
+        sys.exit(1)
 
+    # verify artifacts exist before renaming the dataset
+    best = Path("runs") / "detect" / "train" / "weights" / "best.pt"
+    if not best.exists():
+        print("No training artifacts found at", best)
+        sys.exit(1)
+
+    # record manifest for the one-time initial training
+    _manifest_append(
+        "initial_train",
+        {"save_dir": str((Path("runs") / "detect" / "train").resolve())},
+    )
+
+    # rename dataset so it is not reused accidentally
     USED_PATH = Path("data/yolo_dataset_used")
     if USED_PATH.exists():
         shutil.rmtree(USED_PATH)
     shutil.move("data/yolo_dataset", USED_PATH)
-    print("✅ Renamed yolo_dataset → yolo_dataset_used")
+    print("Renamed yolo_dataset -> yolo_dataset_used")
 
-    print("🔁 Restart the script to continue active learning phase from merged labels")
+    print("Restart the script to continue active learning phase from merged labels")
     sys.exit(0)
 else:
-    print("⚠️ No initial dataset found. Proceeding with active learning flow...")
-    dataset_yaml = "yolo_merged.yaml"
+    print("No initial dataset found. Proceeding with active learning flow...")
+    dataset_yaml = YOLO_MERGED_YAML_ABS
 
+# === Step 1: optional dataset cleanup ===
 if args.clean:
-    print("🧹 Cleaning dataset folders before starting pipeline...")
-    subprocess.run([sys.executable, "cleanup_dataset_folders.py"])
+    print("Cleaning dataset folders before starting pipeline...")
+    subprocess.run([sys.executable, "utils/cleanup_dataset_folders.py"])
 else:
-    print("⚠️ Skipping dataset cleanup (default behavior, no --clean flag)")
+    print("Skipping dataset cleanup (default behavior, no --clean flag)")
 
 merged_images = MERGED_DATASET_ROOT / "images/train"
 merged_labels = MERGED_DATASET_ROOT / "labels/train"
@@ -78,8 +148,12 @@ train_images = list(merged_images.glob("*"))
 train_labels = list(merged_labels.glob("*.txt"))
 
 
+# === Step 2: get latest trained model path ===
 def get_latest_model_path(base_dir="runs/detect"):
+    # search under ml/runs/detect only
     base_dir = Path(base_dir)
+    if not base_dir.exists():
+        raise FileNotFoundError(f"runs folder missing at {base_dir.resolve()}")
     run_dirs = sorted(
         [d for d in base_dir.iterdir() if d.is_dir()],
         key=lambda x: x.stat().st_mtime,
@@ -89,40 +163,38 @@ def get_latest_model_path(base_dir="runs/detect"):
         best = run_dir / "weights/best.pt"
         if best.exists():
             return best
-    raise FileNotFoundError("❌ No valid best.pt found in any run folder.")
+    raise FileNotFoundError("No valid best.pt found in any run folder.")
 
 
 try:
     MODEL_PATH = get_latest_model_path()
-    print(f"📌 MODEL USED: {MODEL_PATH}")
+    print(f"MODEL USED: {MODEL_PATH}")
 except Exception as e:
-    print(f"❌ No trained model found: {e}")
+    print(f"No trained model found: {e}")
     sys.exit(1)
 
-print("🔍 Launching manual_review.py...")
+# === Step 3: launch manual review phase ===
+print("Launching manual_review.py...")
 try:
     subprocess.run([sys.executable, "manual_review.py"], check=True)
 except Exception as e:
-    print(f"❌ manual_review.py failed: {e}")
+    print(f"manual_review.py failed: {e}")
     sys.exit(1)
 
-print("🧪 Running boost_merge_labels.py...")
+# === Step 4: merge labels after review ===
+print("Running boost_merge_labels.py...")
 if subprocess.run([sys.executable, "boost_merge_labels.py"]).returncode != 0:
-    print("❌ boost_merge_labels.py failed")
+    print("boost_merge_labels.py failed")
     sys.exit(1)
 
-TRAIN_DIR = Path("runs/detect/train")
-BACKUP_DIR = Path("runs/detect/previous-train")
+# === Step 5: archive existing stable train (keep history) ===
+_archived = _archive_existing_train()
+if _archived:
+    print("archived old stable model; ready for new training into runs/detect/train")
 
-if TRAIN_DIR.exists():
-    if BACKUP_DIR.exists():
-        shutil.rmtree(BACKUP_DIR)
-        print("🧹 Removed old previous-train folder")
-    shutil.move(str(TRAIN_DIR), str(BACKUP_DIR))
-    print("🔄 Renamed train → previous-train")
-
+# === Step 6: validate labels and images ===
 valid_labels = [f for f in merged_labels.glob("*.txt") if f.stat().st_size > 0]
-print(f"🔍 Valid label files found: {len(valid_labels)}")
+print(f"Valid label files found: {len(valid_labels)}")
 
 unmatched_labels = []
 for label_file in valid_labels:
@@ -131,46 +203,66 @@ for label_file in valid_labels:
         unmatched_labels.append(label_file.name)
 
 if unmatched_labels:
-    print("❌ Some labels do not have matching images:")
+    print("Some labels do not have matching images:")
     for f in unmatched_labels:
         print(f"  - {f}")
-    print("⚠️ Please fix missing image files before training.")
+    print("Please fix missing image files before training.")
     sys.exit(1)
 
 if len(valid_labels) == 0:
-    print("❌ No valid label files found. Training skipped.")
+    print("No valid label files found. Training skipped.")
     sys.exit(1)
 
+# remove old backup txt files if left
 for txt_file in merged_labels.glob("*.bak"):
     txt_file.unlink()
-    print(f"🗑️ Deleted leftover backup file: {txt_file.name}")
+    print(f"Deleted leftover backup file: {txt_file.name}")
 
-print("🔧 Normalizing label coordinates before training...")
+# === Step 7: normalize label coordinates ===
+print("Normalizing label coordinates before training...")
+
+# make the backup folder empty to avoid FileExistsError on Windows
+backup_dir = MERGED_DATASET_ROOT / "labels" / "backup_non_normalized"
+shutil.rmtree(backup_dir, ignore_errors=True)
+backup_dir.mkdir(parents=True, exist_ok=True)
+
 subprocess.run([sys.executable, "utils/fix_non_normalized_labels.py"], check=True)
 
+
+# === Step 8: run training again if data available ===
 if not train_images or not train_labels:
-    print("❌ No training data found. Skipping training.")
+    print("No training data found. Skipping training.")
 else:
-    print(f"✅ Found {len(train_images)} images and {len(train_labels)} labels.")
+    print(f"Found {len(train_images)} images and {len(train_labels)} labels.")
+    # force stable save path under ml/runs/detect/train
+    TRAIN_STABLE = Path("runs") / "detect" / "train"
+    if TRAIN_STABLE.exists():
+        shutil.rmtree(TRAIN_STABLE, ignore_errors=True)
+
     train_args = [
         "yolo",
         "task=detect",
         "mode=train",
         f"model={str(MODEL_PATH)}",
-        f"data={dataset_yaml}",
+        f"data={dataset_yaml}",  # absolute path from above
         "imgsz=960",
         "device=0",
-        "name=train",
+        "project=runs/detect",  # stable root
+        "name=train",  # stable folder
+        "exist_ok=True",
         "resume=False",
         "val=False",
         "epochs=60",
     ]
-    print("🚀 Running YOLO training...")
-    result = subprocess.run(train_args)
+
+    print("Running YOLO training...")
+    result = subprocess.run(train_args, capture_output=True, text=True)
     if result.returncode != 0:
-        print("❌ YOLO training failed to execute properly.")
+        print("YOLO training failed to execute properly.")
+        print(result.stderr or result.stdout)
         sys.exit(1)
 
+    # after training, backup old model and update MODEL_PATH with new best
     final_best = Path("runs/detect/train/weights/best.pt")
     target_model = CONFIG_MODEL_PATH
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -180,23 +272,33 @@ else:
         backup_model.parent.mkdir(parents=True, exist_ok=True)
         if target_model.exists() and final_best.resolve() != target_model.resolve():
             shutil.copy2(target_model, backup_model)
-            print(f"📦 Backed up old model to: {backup_model}")
+            print(f"Backed up old model to: {backup_model}")
         if final_best.resolve() != target_model.resolve():
             shutil.copy2(final_best, target_model)
-            print(f"✅ Updated MODEL_PATH with new best.pt: {target_model}")
+            print(f"Updated MODEL_PATH with new best.pt: {target_model}")
         else:
-            print("⚠️ Skipping model copy — already latest.")
+            print("Skipping model copy because target is already latest.")
     else:
-        print("❌ Training finished, but no best.pt found at expected location.")
-        print("🧹 Cleaning up broken run folder...")
+        print("Training finished, but no best.pt found at expected location.")
+        print("Cleaning up broken run folder...")
         shutil.rmtree("runs/detect/train", ignore_errors=True)
 
+    _manifest_append(
+        "active_learning_train",
+        {
+            "save_dir": str((Path("runs") / "detect" / "train").resolve()),
+            "images": len(train_images),
+            "labels": len(train_labels),
+        },
+    )
+
+# === Step 9: run evaluation after training ===
 eval_dir = Path("eval_output")
 shutil.rmtree(eval_dir / "post_active_learning", ignore_errors=True)
 eval_dir.mkdir(parents=True, exist_ok=True)
 
 if CONFIG_MODEL_PATH.exists():
-    print(f"📊 Evaluating {len(train_images)} images using updated model...")
+    print(f"Evaluating {len(train_images)} images using updated model...")
     eval_args = [
         "yolo",
         "task=detect",
@@ -216,4 +318,4 @@ if CONFIG_MODEL_PATH.exists():
     ]
     subprocess.run(eval_args)
 else:
-    print(f"⚠️ Skipping evaluation — model not found at {CONFIG_MODEL_PATH}")
+    print(f"Skipping evaluation because model not found at {CONFIG_MODEL_PATH}")

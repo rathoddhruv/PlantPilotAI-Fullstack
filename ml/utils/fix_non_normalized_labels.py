@@ -38,7 +38,12 @@ for label_file in LABELS_DIR.glob("*.txt"):
 
     if new_lines:
         # backup original
-        label_file.rename(BACKUP_DIR / label_file.name)
+        (BACKUP_DIR / label_file.name).unlink(
+            missing_ok=True
+        )  # py3.8+: wrap in try/except if needed
+        label_file.replace(
+            BACKUP_DIR / label_file.name
+        )  # os.replace: overwrites on Windows
         # write normalized
         with open(label_file, "w") as f:
             f.writelines(new_lines)
