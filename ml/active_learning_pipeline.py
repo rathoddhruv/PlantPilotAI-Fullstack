@@ -44,8 +44,8 @@ def _manifest_append(event: str, extra: dict):
         rec = {"event": event, "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")}
         rec.update(extra or {})
         mf.write_text(json.dumps([*data, rec], indent=2), encoding="utf-8")
-    except Exception:
-        pass  # do not break training if manifest fails
+    except Exception as e:
+        print(f"Manifest append failed: {e}")  # do not break training if manifest fails
 
 
 print("=== STARTING ACTIVE LEARNING PIPELINE ===")
@@ -94,7 +94,7 @@ if any(initial_images.glob("*")) and valid_initial_labels:
         "task=detect",
         "mode=train",
         "model=yolov8s.pt",
-        f"data={dataset_yaml}",  # <-- FIX: use dataset_yaml (abs path)
+        f"data={dataset_yaml}",
         "imgsz=960",
         "device=0",
         "project=runs/detect",  # stable root

@@ -38,9 +38,10 @@ for label_file in LABELS_DIR.glob("*.txt"):
 
     if new_lines:
         # backup original
-        (BACKUP_DIR / label_file.name).unlink(
-            missing_ok=True
-        )  # py3.8+: wrap in try/except if needed
+        try:
+            (BACKUP_DIR / label_file.name).unlink(missing_ok=True)
+        except Exception as e:
+            print(f"⚠️ error removing backup file: {e}")
         label_file.replace(
             BACKUP_DIR / label_file.name
         )  # os.replace: overwrites on Windows

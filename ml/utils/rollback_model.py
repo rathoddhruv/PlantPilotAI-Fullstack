@@ -5,7 +5,8 @@ ARCHIVE = Path("runs/detect/archive")
 CURRENT = Path("runs/detect/train")
 
 def usage():
-    print("usage: python utils/rollback_model.py <train_YYYYmmdd_HHMMSS>")
+    script_path = Path(__file__).relative_to(Path.cwd())
+    print(f"usage: python {script_path} <train_YYYYmmdd_HHMMSS>")
     sys.exit(2)
 
 if __name__ == "__main__":
