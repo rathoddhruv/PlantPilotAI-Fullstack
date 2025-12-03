@@ -89,22 +89,30 @@ if any(initial_images.glob("*")) and valid_initial_labels:
     _archive_existing_train()  # move previous 'train' to archive if it exists
 
     print("Starting YOLO training with initial dataset...")
-    train_args = [
-        "yolo",
-        "task=detect",
-        "mode=train",
-        "model=yolov8s.pt",
-        f"data={dataset_yaml}",
-        "imgsz=960",
-        "device=0",
-        "project=runs/detect",  # stable root
-        "name=train",  # always 'train'
-        "exist_ok=True",
-        "resume=False",
-        "val=False",
-        "epochs=50",
-    ]
-    proc = subprocess.run(train_args, capture_output=True, text=True)
+train_args = [
+    "yolo",
+    "task=detect",
+    "mode=train",
+    "model=yolov8s.pt",
+    f"data={dataset_yaml}",
+    "imgsz=960",
+    "device=0",
+    "project=runs/detect",  # stable root
+    "name=train",  # always 'train'
+    "exist_ok=True",
+    "resume=False",
+    "val=False",
+    "epochs=100",  # increased epochs for better training
+    "lr0=0.005",   # initial learning rate
+]
+    proc = subprocess.run(
+        train_args,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
     if proc.returncode != 0:
         print("YOLO initial training failed")
         print(proc.stderr or proc.stdout)
@@ -226,6 +234,7 @@ backup_dir = MERGED_DATASET_ROOT / "labels" / "backup_non_normalized"
 shutil.rmtree(backup_dir, ignore_errors=True)
 backup_dir.mkdir(parents=True, exist_ok=True)
 
+
 subprocess.run([sys.executable, "utils/fix_non_normalized_labels.py"], check=True)
 
 
@@ -239,24 +248,32 @@ else:
     if TRAIN_STABLE.exists():
         shutil.rmtree(TRAIN_STABLE, ignore_errors=True)
 
-    train_args = [
-        "yolo",
-        "task=detect",
-        "mode=train",
-        f"model={str(MODEL_PATH)}",
-        f"data={dataset_yaml}",  # absolute path from above
-        "imgsz=960",
-        "device=0",
-        "project=runs/detect",  # stable root
-        "name=train",  # stable folder
-        "exist_ok=True",
-        "resume=False",
-        "val=False",
-        "epochs=60",
-    ]
+train_args = [
+    "yolo",
+    "task=detect",
+    "mode=train",
+    "model=yolov8s.pt",
+    f"data={dataset_yaml}",
+    "imgsz=960",
+    "device=0",
+    "project=runs/detect",  # stable root
+    "name=train",  # always 'train'
+    "exist_ok=True",
+    "resume=False",
+    "val=False",
+    "epochs=100",  # increased epochs for better training
+    "lr0=0.005",   # initial learning rate
+]
 
     print("Running YOLO training...")
-    result = subprocess.run(train_args, capture_output=True, text=True)
+    result = subprocess.run(
+        train_args,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
     if result.returncode != 0:
         print("YOLO training failed to execute properly.")
         print(result.stderr or result.stdout)

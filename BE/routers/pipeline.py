@@ -1,39 +1,73 @@
-# routers/pipeline.py
+# BE/routers/pipeline.py
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from datetime import datetime
-
-from services.active_learning_runner import run_active_learning_pipeline
-from services.runs_catalog import list_runs, rollback_to, read_manifest
+import subprocess, sys
+from pathlib import Path
+from BE.services.runs_catalog import list_runs, rollback_to, read_manifest
 
 router = APIRouter()
 
+# point to real ml folder (outside BE)
+ML_DIR = Path(__file__).resolve().parents[2] / "ml"
+
+
+@router.post("/init")
+def pipeline_init():
+    """run initial training from Label Studio export"""
+    try:
+        result = subprocess.run(
+            [sys.executable, str(ML_DIR / "pipeline_initial.py")],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if result.returncode != 0:
+            return JSONResponse(
+                status_code=500, content={"status": "error", "error": result.stderr}
+            )
+        entry = {
+            "event": "initial_train_complete",
+            "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
+        }
+        return {"status": "ok", "output": result.stdout, "manifest_hint": entry}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/run")
-def run_pipeline(
+def pipeline_run(
     mode: str = Query("active_learning", description="pipeline mode"),
-    confidence_threshold: float = Query(0.25, ge=0.0, le=1.0, description="uncertainty threshold"),
+    confidence_threshold: float = Query(0.25, ge=0.0, le=1.0),
 ):
-    """
-    run active learning as a child process and return status
-    """
-    result = run_active_learning_pipeline(mode=mode, confidence_threshold=confidence_threshold)
-    if result.get("status") != "success":
-        return JSONResponse(status_code=500, content=result)
-    # augment with a minimal manifest event for FE timeline
-    entry = {
-        "event": "train_complete",
-        "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
-        "mode": mode,
-        "threshold": confidence_threshold,
-    }
-    # handled by the ML script too, but ok to double record
-    return {"status": "success", "output": result.get("output", ""), "manifest_hint": entry}
+    """run active learning retrain"""
+    try:
+        result = subprocess.run(
+            [sys.executable, str(ML_DIR / "pipeline_active_learning.py")],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if result.returncode != 0:
+            return JSONResponse(
+                status_code=500, content={"status": "error", "error": result.stderr}
+            )
+        entry = {
+            "event": "train_complete",
+            "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "mode": mode,
+            "threshold": confidence_threshold,
+        }
+        return {"status": "ok", "output": result.stdout, "manifest_hint": entry}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/runs")
 def get_runs():
-    """
-    list current and archived runs with basic metrics
-    """
+    """list all previous runs and manifest info"""
     runs = list_runs()
     return {
         "status": "success",
@@ -42,11 +76,10 @@ def get_runs():
         "manifest": read_manifest(),
     }
 
+
 @router.post("/rollback")
 def rollback(run: str = Query(..., description="archive run name like train_YYYYmmdd_HHMMSS")):
-    """
-    replace current 'train' with a selected archived run
-    """
+    """rollback current train to a selected archived version"""
     res = rollback_to(run)
     if res.get("status") != "success":
         raise HTTPException(status_code=404, detail=res.get("error", "rollback failed"))

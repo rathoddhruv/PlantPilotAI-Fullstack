@@ -15,4 +15,4 @@ for folder in folders_to_clean:
             file.unlink()
         print(f"✔️ cleaned: {folder}")
     else:
-        print(f"⚠️ folder not found: {folder}")
+        print(f"folder not found: {folder}")

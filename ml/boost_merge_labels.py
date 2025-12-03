@@ -111,7 +111,7 @@ dataset_yaml = {
 
 merged_images_dir = merged_root / "images/train"
 if not any(merged_images_dir.glob("*")):
-    print("❌ No merged training images found. Exiting.")
+    print(" No merged training images found. Exiting.")
     exit(1)
 
 with open(YOLO_DATASET_YAML, "w") as f:

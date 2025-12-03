@@ -25,7 +25,7 @@ for img_path in image_folder.glob("*.jpg"):
             label_path = label_folder / f"{img_path.stem}.txt"
             with open(label_path, "w") as f:
                 f.write(label_line)
-            print(f"✅ Labeled as class {key}")
+            print(f" Labeled as class {key}")
         else:
             print("⏭️ Skipped")
 

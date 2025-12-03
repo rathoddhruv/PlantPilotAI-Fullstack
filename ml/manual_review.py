@@ -25,11 +25,11 @@ detect_weights = sorted(
     reverse=True,
 )
 if not detect_weights:
-    print("❌ no trained model found in runs/detect")
+    print(" no trained model found in runs/detect")
     exit()
 
 model_path = Path(detect_weights[0])
-print(f"✅ using latest model: {model_path}")
+print(f" using latest model: {model_path}")
 
 if not model_path.exists():
     print(f"Model path does not exist: {model_path}")
@@ -158,11 +158,11 @@ while current_index < len(image_paths):
             with open(ACTIVE_LABEL_DIR / f"{img_path.stem}.txt", "a") as f:
                 f.write(f"{int(cls_id)} {' '.join(map(str, box))}\n")
             shutil.copy(str(img_path), MERGED_DATASET_ROOT / "images/train")
-            detected_labels.append(f"{label} ✅")
+            detected_labels.append(f"{label} ")
         elif ans in ["w", "wrong"]:
             detections.pop(idx)
             idx -= 1
-            detected_labels.append(f"{label} ❌")
+            detected_labels.append(f"{label} ")
         elif ans == "y1":
             for i, (cid, _, b) in enumerate(detections):
                 if cid == cls_id and i not in handled:
@@ -170,7 +170,7 @@ while current_index < len(image_paths):
                         f.write(f"{int(cid)} {' '.join(map(str, b))}\n")
                     handled.add(i)
             shutil.copy(str(img_path), MERGED_DATASET_ROOT / "images/train")
-            detected_labels.append(f"{label} class ✅")
+            detected_labels.append(f"{label} class ")
         elif ans == "w1":
             to_remove = []
             for i, (cid, _, _) in enumerate(detections):
@@ -178,7 +178,7 @@ while current_index < len(image_paths):
                     to_remove.append(i)
             for i in sorted(to_remove, reverse=True):
                 detections.pop(i)
-            detected_labels.append(f"{label} class ❌")
+            detected_labels.append(f"{label} class ")
             handled.update(to_remove)
         else:
             print("Invalid input.")

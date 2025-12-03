@@ -76,4 +76,4 @@ for epoch in range(NUM_EPOCHS):
 # save model
 Path("model").mkdir(exist_ok=True)
 torch.save(model.state_dict(), MODEL_PATH)
-print(f"✅ Model saved to {MODEL_PATH}")
+print(f" Model saved to {MODEL_PATH}")

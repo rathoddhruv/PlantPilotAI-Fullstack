@@ -1,8 +1,10 @@
 # services/active_learning_runner.py
-import subprocess, os, sys
+import subprocess
+import os
+import sys
 from pathlib import Path
-from settings import ML_DIR, ML_PIPELINE, IMPORT_ZIP_SCRIPT
-from services.textutils import strip_ansi
+from BE.settings import ML_DIR, ML_PIPELINE, IMPORT_ZIP_SCRIPT
+from BE.services.textutils import strip_ansi
 
 
 def import_labelstudio_export(zip_path: Path):
@@ -33,9 +35,6 @@ def run_active_learning_pipeline(
 
 
 def _run(script: Path, env: dict):
-    """
-    helper to execute a python script in ml dir and capture output
-    """
     try:
         r = subprocess.run(
             [sys.executable, str(script)],
@@ -43,10 +42,10 @@ def _run(script: Path, env: dict):
             env=env,
             capture_output=True,
             text=True,
-            encoding="utf-8",  # <— force UTF-8 decode of stdout/stderr
-            errors="replace",  # <— never crash on weird bytes
+            encoding="utf-8",  # <-- add this
+            errors="replace",  # <-- and this
             check=True,
         )
         return {"status": "success", "output": r.stdout}
     except subprocess.CalledProcessError as e:
-        return {"status": "error", "error": e.stderr or e.stdout}
+        return {"status": "error", "error": e.stderr}

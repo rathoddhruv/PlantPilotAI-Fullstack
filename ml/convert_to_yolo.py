@@ -30,5 +30,5 @@ for img in all_images:
     else:
         missing += 1
 
-print(f"✅ {valid_count} image-label pairs moved to train/")
-print(f"⚠️ {missing} images had no labels and were skipped")
+print(f" {valid_count} image-label pairs moved to train/")
+print(f"{missing} images had no labels and were skipped")

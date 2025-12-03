@@ -25,8 +25,6 @@ DEFAULT_DETECT_MODEL = get_path(
 )
 DEFAULT_MODEL = get_path("DEFAULT_MODEL", "runs/detect/train/weights/best.pt")
 MODEL_PATH = get_path("MODEL_PATH", "runs/detect/train/weights/best.pt")  # universal
-# DEFAULT_MODEL = get_path("DEFAULT_MODEL", "runs/detect/train/weights/best.pt")
-# MODEL_PATH = get_path("MODEL_PATH", "runs/detect/train/weights/best.pt")  # universal
 
 # === INPUT + REVIEW PATHS ===
 TEST_IMAGE_FOLDER = get_path("TEST_IMAGE_FOLDER", "C:/Data/Projects/test-1")
@@ -37,7 +35,9 @@ ORIGINAL_LABELS = get_path("ORIGINAL_LABELS", "data/yolo_dataset/labels/train")
 # === REVIEW SETTINGS ===
 UNCERTAIN_THRESHOLD = get_float("UNCERTAIN_THRESHOLD", 0.35)
 IMG_SIZE = get_int("IMG_SIZE", 960)
-ACDSEE_PATH = os.getenv("ACDSEE_PATH", "C:/Program Files/ACD Systems/ACDSee Pro/6.0/ACDSeePro6.exe")
+ACDSEE_PATH = os.getenv(
+    "ACDSEE_PATH", "C:/Program Files/ACD Systems/ACDSee Pro/6.0/ACDSeePro6.exe"
+)
 
 # === OUTPUT PATHS ===
 ACTIVE_LABEL_DIR = get_path("ACTIVE_LABEL_DIR", "active_labels")
@@ -47,11 +47,21 @@ SAVE_DIR = get_path("SAVE_DIR", "runs/active_review_output")
 MERGED_DATASET_ROOT = get_path("MERGED_DATASET_ROOT", "data/yolo_merged")
 YOLO_DATASET_YAML = get_path("YOLO_DATASET_YAML", "yolo_dataset.yaml")
 
-
 # === DATA SPLIT ===
 SPLIT_RATIO = get_float("SPLIT_RATIO", 0.9)
 
-# === CLASS LABELS ===
+# === CLASS LABELS (safe fallback) ===
+# ensure we look for class_names.txt relative to this file if not found
+THIS_DIR = Path(__file__).resolve().parent
+if not CLASS_FILE.exists():
+    alt_path = THIS_DIR / "class_names.txt"
+    if alt_path.exists():
+        CLASS_FILE = alt_path
+    else:
+        print(f"[WARN] class_names.txt not found at {CLASS_FILE}, using default placeholder.")
+        # create a temporary default file to avoid crash
+        CLASS_FILE.write_text("default_class\n", encoding="utf-8")
+
 with CLASS_FILE.open("r", encoding="utf-8") as f:
     CLASS_NAMES = [line.strip() for line in f if line.strip()]
 

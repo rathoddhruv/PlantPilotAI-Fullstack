@@ -3,8 +3,8 @@ from fastapi import APIRouter, UploadFile, File, BackgroundTasks, HTTPException
 from pathlib import Path
 import shutil
 
-from settings import UPLOAD_DIR, LABEL_STUDIO_DIR
-from services.active_learning_runner import import_labelstudio_export
+from BE.settings import UPLOAD_DIR, LABEL_STUDIO_DIR
+from BE.services.active_learning_runner import import_labelstudio_export
 
 router = APIRouter()
 

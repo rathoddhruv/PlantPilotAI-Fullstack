@@ -4,8 +4,11 @@ from pathlib import Path
 import shutil
 import subprocess, sys
 
-from settings import UPLOAD_DIR, LABEL_STUDIO_DIR
-from services.active_learning_runner import import_labelstudio_export, run_active_learning_pipeline
+from BE.settings import UPLOAD_DIR, LABEL_STUDIO_DIR
+from BE.services.active_learning_runner import (
+    import_labelstudio_export,
+    run_active_learning_pipeline,
+)
 
 router = APIRouter()
 

@@ -6,7 +6,7 @@ import shutil
 import json
 import re
 
-from settings import ML_DIR
+from BE.settings import ML_DIR
 
 RUNS_DETECT = (ML_DIR / "runs" / "detect").resolve()
 CURRENT = RUNS_DETECT / "train"

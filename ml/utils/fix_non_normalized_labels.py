@@ -1,5 +1,9 @@
 import cv2
 from pathlib import Path
+import sys
+
+sys.stdout.reconfigure(encoding="utf-8")
+
 
 LABELS_DIR = Path("data/yolo_merged/labels/train")
 IMAGES_DIR = Path("data/yolo_merged/images/train")
@@ -19,12 +23,12 @@ skipped = 0
 for label_file in LABELS_DIR.glob("*.txt"):
     img_file = IMAGES_DIR / (label_file.stem + ".jpg")
     if not img_file.exists():
-        print(f"❌ image missing for: {label_file.name}")
+        print(f" image missing for: {label_file.name}")
         continue
 
     img = cv2.imread(str(img_file))
     if img is None:
-        print(f"❌ cannot open image: {img_file.name}")
+        print(f" cannot open image: {img_file.name}")
         continue
 
     h, w = img.shape[:2]
@@ -50,9 +54,9 @@ for label_file in LABELS_DIR.glob("*.txt"):
             f.writelines(new_lines)
         fixed += 1
     else:
-        print(f"⚠️ skipped empty or invalid: {label_file.name}")
+        print(f"skipped empty or invalid: {label_file.name}")
         skipped += 1
 
-print(f"\n✅ fixed {fixed} label files")
-print(f"⚠️ skipped {skipped} files")
-print("📦 backup of originals saved in:", BACKUP_DIR)
+print(f"\nfixed {fixed} label files")
+print(f"skipped {skipped} files")
+print(" backup of originals saved in:", BACKUP_DIR)

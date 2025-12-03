@@ -16,4 +16,4 @@ out_path = Path("yolo_merged.yaml")
 with out_path.open("w") as f:
     yaml.dump(yaml_data, f, sort_keys=False)
 
-print(f"✅ dataset yaml generated at: {out_path}")
+print(f" dataset yaml generated at: {out_path}")

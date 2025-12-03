@@ -30,7 +30,7 @@ image_paths = (
 )
 
 if not image_paths:
-    print("❌ No images found in the folder!")
+    print(" No images found in the folder!")
     exit()
 
 summary = []
@@ -83,9 +83,9 @@ for img_path in image_paths:
                     box = boxes.xywhn[i].tolist()
                     with open(label_file, "w") as f:
                         f.write(f"{int(cls_id)} {' '.join(map(str, box))}\n")
-                    print(f"✅ Saved manual label to {label_file}")
+                    print(f" Saved manual label to {label_file}")
             else:
-                print(f"✅ Detected: {label} ({conf_pct}%)")
+                print(f" Detected: {label} ({conf_pct}%)")
                 detected_labels.append(f"{label} ({conf_pct}%)")
 
         row.append(", ".join(detected_labels) if detected_labels else "Uncertain")
@@ -97,15 +97,15 @@ for img_path in image_paths:
             cv2.waitKey(0)
             cv2.destroyAllWindows()
         else:
-            print(f"⚠️ Could not load result image: {result_img_path}")
+            print(f"Could not load result image: {result_img_path}")
     else:
-        print("⚠️ No detections. Label manually? (y/n): ", end="")
+        print("No detections. Label manually? (y/n): ", end="")
         row.append("None")
         choice = input().strip().lower()
         if choice == "y":
             manual_review_dir.mkdir(exist_ok=True)
             shutil.copy(str(img_path), manual_review_dir / img_path.name)
-            print(f"✅ Copied image to {manual_review_dir}")
+            print(f" Copied image to {manual_review_dir}")
 
     summary.append(row)
 
