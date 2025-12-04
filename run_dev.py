@@ -9,11 +9,11 @@ ROOT = Path(__file__).resolve().parent
 
 BE_PATH = ROOT / "BE"
 FE_PATH = ROOT / "FE"
+PY = ROOT / ".venv" / "Scripts" / "python.exe"
+NPM = "npm.cmd"
 
-VENV_PATH = ROOT / ".venv" / "Scripts" / "python.exe"
-
-BACKEND_COMMAND = [
-    str(VENV_PATH),
+BACKEND = [
+    str(PY),
     "-m",
     "uvicorn",
     "BE.main:app",
@@ -24,67 +24,65 @@ BACKEND_COMMAND = [
     "8000",
 ]
 
-FRONTEND_COMMAND = ["C:\\Program Files\\nodejs\\npm.cmd", "start"]
-
+FRONTEND = [NPM, "start"]
 
 def read_output(proc, prefix):
     for line in iter(proc.stdout.readline, ""):
-        print(f"[{prefix}] {line.strip()}")
-    if proc.stderr:
-        for line in iter(proc.stderr.readline, ""):
-            print(f"[{prefix} ERROR] {line.strip()}")
-
+        if not line:
+            break
+        # ignore all encoding issues
+        text = line.rstrip()
+        print(f"[{prefix}] {text}", flush=True)
+    proc.stdout.close()
 
 def start_process(cmd, cwd, prefix):
     env = os.environ.copy()
-    print(f"starting {prefix} with command: {' '.join(cmd)} in directory: {cwd}")
-
-    if prefix == "backend":
-        env["PYTHONPATH"] = str(ROOT)
+    env["PYTHONPATH"] = str(ROOT)  # backend imports work
 
     proc = subprocess.Popen(
         cmd,
         cwd=cwd,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
-        encoding="utf8",
-        errors="ignore",
+        encoding="utf-8",
+        errors="replace",
         env=env,
     )
-
     Thread(target=read_output, args=(proc, prefix), daemon=True).start()
     return proc
 
-
 def main():
-    print(f"Root path: {ROOT}")
-    print(f"Backend command: {' '.join(BACKEND_COMMAND)}")
-    print(f"Frontend command: {' '.join(FRONTEND_COMMAND)}")
-    print("Press ctrl+c to stop")
+    print("starting backend and frontend (dev mode)...")
 
-    processes = [
-        {"cmd": BACKEND_COMMAND, "cwd": BE_PATH, "prefix": "backend", "proc": None},
-        {"cmd": FRONTEND_COMMAND, "cwd": FE_PATH, "prefix": "frontend", "proc": None},
-    ]
+    procs = {
+        "backend": {"cmd": BACKEND, "cwd": BE_PATH, "proc": None},
+        "frontend": {"cmd": FRONTEND, "cwd": FE_PATH, "proc": None},
+    }
+
+    for name, p in procs.items():
+        p["proc"] = start_process(p["cmd"], p["cwd"], name)
+
+    print("running... ctrl+c to exit")
 
     try:
-        for p in processes:
-            p["proc"] = start_process(p["cmd"], p["cwd"], p["prefix"])
-
         while True:
+            for name, p in procs.items():
+                proc = p["proc"]
+                code = proc.poll()
+                if code is not None:
+                    print(f"[{name}] stopped with code {code}, restarting in 2s...")
+                    time.sleep(2)
+                    p["proc"] = start_process(p["cmd"], p["cwd"], name)
             time.sleep(1)
-
     except KeyboardInterrupt:
-        print("shutting down")
-        for p in processes:
-            proc = p["proc"]
-            proc.terminate()
+        print("shutting down processes...")
+        for name, p in procs.items():
             try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-
+                p["proc"].terminate()
+            except:
+                pass
+        print("done")
 
 if __name__ == "__main__":
     main()
