@@ -1,17 +1,17 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
-import { Layout } from './core/layout/layout';
-import { Upload } from './features/upload/upload';
-import { Predictions } from './features/predictions/predictions';
-import { Review } from './features/review/review';
-import { Classes } from './features/classes/classes';
+import { LayoutComponent } from './core/layout/layout.component';
+import { UploadComponent } from './features/upload/upload.component';
+import { PredictionsComponent } from './features/predictions/predictions.component';
+import { ReviewComponent } from './features/review/review.component';
+import { ClassesComponent } from './features/classes/classes.component';
 
 const routes: Routes = [
-  { path: '', component: Layout },
-  { path: 'upload', component: Upload },
-  { path: 'predictions', component: Predictions },
-  { path: 'review', component: Review },
-  { path: 'classes', component: Classes }
+  { path: '', component: LayoutComponent },
+  { path: 'upload', component: UploadComponent },
+  { path: 'predictions', component: PredictionsComponent },
+  { path: 'review', component: ReviewComponent },
+  { path: 'classes', component: ClassesComponent }
 ];
 
 @NgModule({

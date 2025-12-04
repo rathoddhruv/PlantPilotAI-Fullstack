@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 # paths
-ML_DIR = (ROOT_DIR / "ml").resolve()
+ML_DIR = (ROOT_DIR / "ML").resolve()
 UPLOAD_DIR = (ML_DIR / "data" / "test_images").resolve()
 LABEL_STUDIO_DIR = (ML_DIR / "label_studio_exports").resolve()
 

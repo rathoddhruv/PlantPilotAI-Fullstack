@@ -54,7 +54,7 @@ def run_pipeline():
     returns 200 on success and 500 with stderr on failure
     """
     try:
-        script_path = Path("ml") / "active_learning_pipeline.py"
+        script_path = Path("ML") / "active_learning_pipeline.py"
         abs_script_path = script_path.resolve()
         proc = subprocess.run(
             [sys.executable, str(abs_script_path)],

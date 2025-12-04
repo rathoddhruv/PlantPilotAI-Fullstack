@@ -9,7 +9,7 @@ from BE.services.runs_catalog import list_runs, rollback_to, read_manifest
 router = APIRouter()
 
 # point to real ml folder (outside BE)
-ML_DIR = Path(__file__).resolve().parents[2] / "ml"
+ML_DIR = Path(__file__).resolve().parents[2] / "ML"
 
 
 @router.post("/init")
