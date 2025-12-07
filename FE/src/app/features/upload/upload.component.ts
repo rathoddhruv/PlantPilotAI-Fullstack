@@ -102,22 +102,22 @@ export class UploadComponent {
 
         if (file.name.endsWith('.zip')) {
             this.api.initProject(file).subscribe({
-                next: (res) => {
+                next: (res: any) => {
                     this.loading = false;
                     this.message = 'Project initialized! Training started in background.';
                 },
-                error: (err) => {
+                error: (err: any) => {
                     this.loading = false;
                     this.error = 'Upload failed: ' + err.message;
                 }
             });
         } else if (file.type.startsWith('image/')) {
             this.api.predict(file).subscribe({
-                next: (res) => {
+                next: (res: any) => {
                     this.loading = false;
                     this.router.navigate(['/review'], { state: { prediction: res } });
                 },
-                error: (err) => {
+                error: (err: any) => {
                     this.loading = false;
                     this.error = 'Prediction failed: ' + err.message;
                 }
