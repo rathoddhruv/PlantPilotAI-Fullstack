@@ -63,6 +63,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--clean", action="store_true", help="Clean dataset folders before pipeline"
 )
+parser.add_argument(
+    "--no-interactive", action="store_true", help="Skip manual review (API mode)"
+)
 args = parser.parse_args()
 
 # === Step 0.5: Handle initial training from Label Studio dataset ===
@@ -89,22 +92,23 @@ if any(initial_images.glob("*")) and valid_initial_labels:
     _archive_existing_train()  # move previous 'train' to archive if it exists
 
     print("Starting YOLO training with initial dataset...")
-train_args = [
-    "yolo",
-    "task=detect",
-    "mode=train",
-    "model=yolov8s.pt",
-    f"data={dataset_yaml}",
-    "imgsz=960",
-    "device=0",
-    "project=runs/detect",  # stable root
-    "name=train",  # always 'train'
-    "exist_ok=True",
-    "resume=False",
-    "val=False",
-    "epochs=100",  # increased epochs for better training
-    "lr0=0.005",   # initial learning rate
-]
+    train_args = [
+        "yolo",
+        "task=detect",
+        "mode=train",
+        "model=yolov8s.pt",
+        f"data={dataset_yaml}",
+        "imgsz=960",
+        "device=0",
+        "project=runs/detect",  # stable root
+        "name=train",  # always 'train'
+        "exist_ok=True",
+        "resume=False",
+        "val=False",
+        "epochs=100",  # increased epochs for better training
+        "lr0=0.005",   # initial learning rate
+    ]
+
     proc = subprocess.run(
         train_args,
         capture_output=True,
@@ -182,12 +186,16 @@ except Exception as e:
     sys.exit(1)
 
 # === Step 3: launch manual review phase ===
-print("Launching manual_review.py...")
-try:
-    subprocess.run([sys.executable, "manual_review.py"], check=True)
-except Exception as e:
-    print(f"manual_review.py failed: {e}")
-    sys.exit(1)
+# === Step 3: launch manual review phase ===
+if not args.no_interactive:
+    print("Launching manual_review.py...")
+    try:
+        subprocess.run([sys.executable, "manual_review.py"], check=True)
+    except Exception as e:
+        print(f"manual_review.py failed: {e}")
+        sys.exit(1)
+else:
+    print("Skipping manual_review.py (no-interactive mode).")
 
 # === Step 4: merge labels after review ===
 print("Running boost_merge_labels.py...")
@@ -248,22 +256,22 @@ else:
     if TRAIN_STABLE.exists():
         shutil.rmtree(TRAIN_STABLE, ignore_errors=True)
 
-train_args = [
-    "yolo",
-    "task=detect",
-    "mode=train",
-    "model=yolov8s.pt",
-    f"data={dataset_yaml}",
-    "imgsz=960",
-    "device=0",
-    "project=runs/detect",  # stable root
-    "name=train",  # always 'train'
-    "exist_ok=True",
-    "resume=False",
-    "val=False",
-    "epochs=100",  # increased epochs for better training
-    "lr0=0.005",   # initial learning rate
-]
+    train_args = [
+        "yolo",
+        "task=detect",
+        "mode=train",
+        "model=yolov8s.pt",
+        f"data={dataset_yaml}",
+        "imgsz=960",
+        "device=0",
+        "project=runs/detect",  # stable root
+        "name=train",  # always 'train'
+        "exist_ok=True",
+        "resume=False",
+        "val=False",
+        "epochs=100",  # increased epochs for better training
+        "lr0=0.005",   # initial learning rate
+    ]
 
     print("Running YOLO training...")
     result = subprocess.run(
