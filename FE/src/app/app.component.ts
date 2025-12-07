@@ -1,28 +1,14 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
-import { TrainingSidebarComponent } from './features/review/training-sidebar.component';
+import { TrainingSidebarComponent } from './features/review/sidebar/training-sidebar.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [CommonModule, RouterOutlet, TrainingSidebarComponent],
-  template: `
-    <div class="flex h-screen overflow-hidden bg-gray-50 font-sans text-gray-900">
-      
-      <!-- Main Content Area -->
-      <main class="flex-1 relative overflow-auto scroll-smooth">
-         <router-outlet></router-outlet>
-      </main>
-
-      <!-- Persistent Right Sidebar -->
-      <aside class="w-80 flex-shrink-0 z-30 h-full border-l border-gray-200 bg-white shadow-xl relative">
-          <app-training-sidebar></app-training-sidebar>
-      </aside>
-
-    </div>
-  `,
-  styles: []
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.scss']
 })
 export class AppComponent {
   title = 'plant-pilot';

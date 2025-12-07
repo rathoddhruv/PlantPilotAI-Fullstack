@@ -12,6 +12,13 @@ FE_DIR = ROOT_DIR / "FE"
 def run_dev():
     print("🌿 Starting PlantPilotAI Fullstack...")
 
+    # Install dependencies
+    print("📦 Installing dependencies (numpy)...")
+    subprocess.run([sys.executable, "-m", "pip", "install", "numpy"], check=False)
+    
+    print("installing cv2 pillow ultralytics pyyaml")
+    subprocess.run([sys.executable, "-m", "pip", "install", "opencv-python pillow ultralytics pyyaml"], check=False)
+
     # Start Backend
     print("🚀 Starting FastAPI Backend (Port 8000)...")
     # We use Popen to run in parallel

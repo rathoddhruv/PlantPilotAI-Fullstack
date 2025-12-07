@@ -7,6 +7,12 @@ from BE.routers import project, inference
 from BE.routers.pipeline import router as pipeline_router
 from BE.routers.uploads import router as uploads_router
 
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+
 app = FastAPI()
 
 app.add_middleware(

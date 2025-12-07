@@ -5,69 +5,82 @@ from pathlib import Path
 from ultralytics import YOLO
 from BE.settings import ML_DIR, IMPORT_ZIP_SCRIPT, ML_PIPELINE
 
+import logging
+logger = logging.getLogger("plantpilot")
+
 class MLService:
     def __init__(self):
         self.model = None
         self.model_path = None
-        self._load_best_model()
+        self.load_model()
 
-    def _load_best_model(self):
-        """Find and load the best available model."""
-        # Check standard location first
-        possible_paths = [
-            ML_DIR / "yolov8s.pt",             # Default base
-            ML_DIR / "yolov8n.pt",             # Fallback
-        ]
-        
-        # Check for trained models
+    def load_model(self):
         runs_dir = ML_DIR / "runs" / "detect"
-        if runs_dir.exists():
-            # Find latest run with best.pt
-            for run in sorted(runs_dir.glob("*"), key=lambda x: x.stat().st_mtime, reverse=True):
-                best_pt = run / "weights" / "best.pt"
-                if best_pt.exists():
-                    possible_paths.insert(0, best_pt)
-                    break 
-        
-        for p in possible_paths:
-            if p.exists():
-                print(f"Loading model from: {p}")
-                self.model_path = p
-                self.model = YOLO(str(p))
-                return
+        logger.info(f"ML load_model called, runs dir: {runs_dir}")
+        runs = sorted(
+            runs_dir.glob("*/weights/best.pt"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True
+        ) if runs_dir.exists() else []
 
-        print("No model found. Inference will fail until a model is trained or downloaded.")
+        if runs:
+            logger.info(f"Loading trained best.pt from {runs[0]}")
+            self.model = YOLO(str(runs[0]))
+            return
+
+        base = ML_DIR / "yolov8s.pt"
+        if base.exists():
+            logger.info(f"No trained run, loading base model {base}")
+            self.model = YOLO(str(base))
+            return
+
+        logger.error("No model file found at runs or base. Inference will fail.")
+        self.model = None
 
     def run_import_zip(self, zip_path: Path):
         """Run the import script for a Label Studio ZIP."""
         cmd = [sys.executable, str(IMPORT_ZIP_SCRIPT), str(zip_path)]
+        logger.info(f"Importing Label Studio zip from {zip_path}")
+        logger.info(f"Running import command: {cmd}")
+        
         result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+        
         if result.returncode != 0:
+            logger.error(f"Import failed stderr: {result.stderr}")
             raise RuntimeError(f"Import failed: {result.stderr}")
+            
+        logger.info(f"Import completed with code {result.returncode}")
         return result.stdout
 
     def run_training(self):
         """Run the active learning pipeline in non-interactive mode."""
         cmd = [sys.executable, str(ML_PIPELINE), "--no-interactive"]
-        # This might take a while, so we usually run it in background. 
-        # For now, we run it synchronously or rely on BackgroundTasks in FastAPI.
+        logger.info(f"Starting training with command: {cmd}")
+        
         result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
         
-        # Reload model after training
-        self._load_best_model()
-        
         if result.returncode != 0:
+            logger.error(f"Training failed stderr: {result.stderr}")
             raise RuntimeError(f"Training failed: {result.stderr}")
+
+        logger.info(f"Training completed with code {result.returncode}")
+        logger.info("Reloading model after training")
+        self.load_model()
+        
         return result.stdout
 
     def predict(self, image_path: Path, conf=0.25):
         """Run inference on a single image."""
+        logger.info(f"Predict request for {image_path}")
         if not self.model:
-            self._load_best_model()
+            logger.warning("Model is None, will attempt reload")
+            self.load_model()
             if not self.model:
+                logger.error("No model loaded after reload")
                 raise RuntimeError("No model loaded")
 
-        results = self.model.predict(source=str(image_path), conf=conf)
+        logger.info(f"Using model type {type(self.model)} with conf {conf}")
+        results = self.model.predict(source=str(image_path), conf=conf, verbose=False)
         result = results[0]
         
         detections = []

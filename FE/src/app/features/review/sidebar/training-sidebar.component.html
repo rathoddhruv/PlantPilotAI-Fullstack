@@ -1,0 +1,135 @@
+<div class="h-full flex flex-col bg-white border-l border-gray-200 shadow-xl overflow-hidden font-sans">
+
+    <!-- Header -->
+    <div class="p-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+        <h2 class="text-xl font-extrabold text-gray-800 flex items-center tracking-tight">
+            <span class="mr-2 text-2xl">📊</span> Training Hub
+        </h2>
+        <div class="mt-2 flex items-center space-x-2 text-xs text-gray-500">
+            <span class="flex h-2 w-2 relative">
+                <span
+                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            <span>System Online & Polling</span>
+        </div>
+    </div>
+
+    <!-- Latest Metrics -->
+    <div class="p-5 bg-gray-50/50 border-b border-gray-200 overflow-y-auto max-h-[40vh]">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Current Performance</h3>
+            <span *ngIf="latestRun"
+                class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 border border-green-200 uppercase">
+                {{ latestRun.name }}
+            </span>
+        </div>
+
+        <div *ngIf="latestRun; else noModel" class="grid grid-cols-2 gap-3">
+            <!-- Main Metric -->
+            <div
+                class="col-span-2 bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center relative overflow-hidden group">
+                <div
+                    class="absolute right-0 top-0 w-16 h-16 bg-gradient-to-br from-green-50 to-transparent rounded-bl-full -mr-2 -mt-2">
+                </div>
+                <div>
+                    <p class="text-xs text-gray-400 font-medium uppercase">mAP50</p>
+                    <p class="text-3xl font-extrabold text-green-600 tracking-tight">{{
+                        formatMetric(latestRun.metrics.map50) }}</p>
+                </div>
+                <div class="text-right z-10">
+                    <p class="text-[10px] text-gray-400">Target: 0.90+</p>
+                    <div class="w-20 h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                        <div class="h-full bg-green-500 rounded-full"
+                            [style.width.%]="(latestRun.metrics.map50 || 0) * 100"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Secondary Metrics -->
+            <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <p class="text-[10px] text-gray-400 uppercase font-bold">Precision</p>
+                <p class="text-xl font-bold text-gray-700 mt-1">{{ formatMetric(latestRun.metrics.precision) }}</p>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <p class="text-[10px] text-gray-400 uppercase font-bold">Recall</p>
+                <p class="text-xl font-bold text-gray-700 mt-1">{{ formatMetric(latestRun.metrics.recall) }}</p>
+            </div>
+
+            <!-- Loss -->
+            <div class="col-span-2 bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex justify-between">
+                <div>
+                    <p class="text-[10px] text-gray-400 uppercase font-bold">Box Loss</p>
+                    <p class="text-sm font-bold text-gray-600">{{ formatMetric(latestRun.metrics.box_loss, 4) }}</p>
+                </div>
+                <div>
+                    <p class="text-[10px] text-gray-400 uppercase font-bold">Cls Loss</p>
+                    <p class="text-sm font-bold text-gray-600">{{ formatMetric(latestRun.metrics.cls_loss, 4) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Classes Info -->
+        <div class="mt-4 pt-4 border-t border-gray-100">
+            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Active Classes</h4>
+            <div class="flex flex-wrap gap-2">
+                <span *ngFor="let cls of classNames"
+                    class="px-2 py-1 bg-white border border-gray-200 rounded-md text-xs font-medium text-gray-600 shadow-sm">
+                    {{ cls }}
+                </span>
+            </div>
+        </div>
+
+        <ng-template #noModel>
+            <div class="bg-gray-100 rounded-xl p-6 text-center border border-dashed border-gray-300">
+                <span class="text-2xl mb-2 block">🌱</span>
+                <p class="text-gray-500 font-medium text-sm">No training runs yet.</p>
+                <p class="text-xs text-gray-400 mt-1">Upload a ZIP to initialize.</p>
+            </div>
+        </ng-template>
+    </div>
+
+    <!-- History List -->
+    <div class="flex-1 overflow-hidden flex flex-col bg-gray-50">
+        <div class="px-5 py-3 border-b border-gray-200 bg-gray-100 flex justify-between items-center">
+            <h3 class="text-xs font-bold text-gray-500 uppercase">Run History</h3>
+            <span class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{{ runs.length
+                }}</span>
+        </div>
+
+        <div class="overflow-y-auto p-3 space-y-3">
+            <div *ngFor="let run of runs"
+                class="group relative bg-white p-3 rounded-lg border hover:border-blue-300 hover:shadow-md transition-all duration-200 cursor-default"
+                [class.border-l-4]="run.kind === 'current'" [class.border-l-green-500]="run.kind === 'current'"
+                [class.border-gray-200]="run.kind !== 'current'">
+
+                <div class="flex justify-between items-start mb-1">
+                    <div>
+                        <h4 class="text-xs font-bold text-gray-800 truncate w-32" [title]="run.name">{{ run.name }}</h4>
+                        <p class="text-[10px] text-gray-400 mt-0.5">{{ formatTime(run.mtime) }}</p>
+                    </div>
+                    <span *ngIf="run.kind === 'current'"
+                        class="px-1.5 py-0.5 bg-green-100 text-green-700 text-[9px] font-bold uppercase rounded tracking-wide">
+                        Active
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-3 gap-1 mt-2 border-t border-gray-50 pt-2">
+                    <div class="text-center">
+                        <p class="text-[9px] text-gray-400 uppercase">mAP</p>
+                        <p class="text-xs font-bold text-gray-700">{{ formatMetric(run.metrics.map50) }}</p>
+                    </div>
+                    <div class="text-center border-l border-gray-100">
+                        <p class="text-[9px] text-gray-400 uppercase">Prec</p>
+                        <p class="text-xs font-bold text-gray-700">{{ formatMetric(run.metrics.precision) }}</p>
+                    </div>
+                    <div class="text-center border-l border-gray-100">
+                        <p class="text-[9px] text-gray-400 uppercase">Rec</p>
+                        <p class="text-xs font-bold text-gray-700">{{ formatMetric(run.metrics.recall) }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>

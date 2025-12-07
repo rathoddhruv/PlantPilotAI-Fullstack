@@ -6,6 +6,9 @@ from BE.services.ml_service import ml_service
 
 router = APIRouter()
 
+import logging
+logger = logging.getLogger("plantpilot")
+
 @router.post("/init")
 async def initialize_project(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """
@@ -20,22 +23,21 @@ async def initialize_project(background_tasks: BackgroundTasks, file: UploadFile
     with destination.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Run import immediately or background? 
-    # For init, user might wait, but import can be slow. 
-    # Let's run synchronously for 'init' to confirm success, or backgound if huge.
-    # The user requirements say "User drags... backend extracts ... trains".
-    # Training takes long. Extraction is fast. 
-    # Let's extract sync, train async.
-    
     try:
+        logger.info(f"Project init called with file {file.filename}")
+        
         # Extract and setup dataset
         ml_service.run_import_zip(destination)
         
-        # Trigger initial training in background
-        background_tasks.add_task(ml_service.run_training)
+        # Trigger initial training in background via thread
+        logger.info("Starting training thread from /project/init")
+        import threading
+        t = threading.Thread(target=ml_service.run_training, daemon=True)
+        t.start()
         
         return {"status": "success", "message": "Project initialized. Training started in background."}
     except Exception as e:
+        logger.exception("Project initialization failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/train")
