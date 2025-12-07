@@ -1,12 +1,12 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ApiService, RunInfo } from '../../../../core/services/api.service';
+import { ApiService, RunInfo } from '../../../core/services/api.service';
 
 @Component({
-    selector: 'app-dashboard-sidebar',
-    standalone: true,
-    imports: [CommonModule],
-    template: `
+  selector: 'app-dashboard-sidebar',
+  standalone: true,
+  imports: [CommonModule],
+  template: `
     <div class="w-80 bg-gray-900 border-r border-gray-800 p-6 flex flex-col h-full text-gray-300">
       <!-- Header -->
       <div class="mb-8">
@@ -81,28 +81,28 @@ import { ApiService, RunInfo } from '../../../../core/services/api.service';
   `
 })
 export class DashboardSidebarComponent implements OnInit {
-    @Input() runs: RunInfo[] = [];
-    @Input() manifest: any[] = []; // Used to calc stats
+  @Input() runs: RunInfo[] = [];
+  @Input() manifest: any[] = []; // Used to calc stats
 
-    sysInfo: any = null;
+  sysInfo: any = null;
 
-    constructor(private api: ApiService) { }
+  constructor(private api: ApiService) { }
 
-    ngOnInit() {
-        this.api.getSystemInfo().subscribe(res => {
-            this.sysInfo = res;
-        });
-    }
+  ngOnInit() {
+    this.api.getSystemInfo().subscribe(res => {
+      this.sysInfo = res;
+    });
+  }
 
-    get retrainCount(): number {
-        return this.manifest ? this.manifest.filter(e => e.event === 'active_learning_train').length : 0;
-    }
+  get retrainCount(): number {
+    return this.manifest ? this.manifest.filter(e => e.event === 'active_learning_train').length : 0;
+  }
 
-    rollback(runName: string) {
-        if (!confirm(`Are you sure you want to rollback to ${runName}?`)) return;
-        this.api.rollback(runName).subscribe({
-            next: () => alert('Rollback successful. Model updated.'),
-            error: (e) => alert('Rollback failed: ' + e.message)
-        });
-    }
+  rollback(runName: string) {
+    if (!confirm(`Are you sure you want to rollback to ${runName}?`)) return;
+    this.api.rollback(runName).subscribe({
+      next: () => alert('Rollback successful. Model updated.'),
+      error: (e) => alert('Rollback failed: ' + e.message)
+    });
+  }
 }

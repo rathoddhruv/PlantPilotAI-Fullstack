@@ -5,11 +5,12 @@ import { ApiService, RunInfo } from '../../core/services/api.service';
 import { Router } from '@angular/router';
 import { interval } from 'rxjs';
 import { startWith, switchMap } from 'rxjs/operators';
+import { DashboardSidebarComponent } from './sidebar/dashboard-sidebar.component';
 
 @Component({
     selector: 'app-upload',
     standalone: true,
-    imports: [CommonModule, FormsModule],
+    imports: [CommonModule, FormsModule, DashboardSidebarComponent],
     templateUrl: './upload.component.html',
     styleUrls: ['./upload.component.scss']
 })

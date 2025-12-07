@@ -1,6 +1,13 @@
 from fastapi import APIRouter, UploadFile, File, BackgroundTasks, HTTPException, Form
+from BE.settings import LABEL_STUDIO_DIR
+from BE.services.ml_service import MLService
+import shutil
+import logging
+import sys
 
-# ... imports ...
+logger = logging.getLogger(__name__)
+router = APIRouter()
+ml_service = MLService()
 
 @router.post("/init")
 def initialize_project(
