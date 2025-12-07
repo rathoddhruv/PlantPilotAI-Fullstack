@@ -8,11 +8,10 @@ from pathlib import Path
 from datetime import datetime
 from config_loader import (
     MODEL_PATH as CONFIG_MODEL_PATH,
-    MERGED_DATASET_ROOT,
-)
+import torch
 
-
-def _archive_existing_train():
+def get_device():
+    return "0" if torch.cuda.is_available() else "cpu"
     """move current runs/detect/train into runs/detect/archive/train_<timestamp>"""
     runs_root = Path("runs") / "detect"
     train_dir = runs_root / "train"
@@ -66,6 +65,8 @@ parser.add_argument(
 parser.add_argument(
     "--no-interactive", action="store_true", help="Skip manual review (API mode)"
 )
+parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs")
+parser.add_argument("--imgsz", type=int, default=960, help="Image size for training")
 args = parser.parse_args()
 
 # === Step 0.5: Handle initial training from Label Studio dataset ===
@@ -273,7 +274,7 @@ else:
         "lr0=0.005",   # initial learning rate
     ]
 
-    print("Running YOLO training...")
+    print(f"Running YOLO training (Fine-tuning from {MODEL_PATH})...")
     result = subprocess.run(
         train_args,
         capture_output=True,
@@ -333,7 +334,7 @@ if CONFIG_MODEL_PATH.exists():
         "imgsz=960",
         "conf=0.25",
         "iou=0.5",
-        "device=0",
+        f"device={get_device()}",
         "show=False",
         "save=True",
         "save_txt=False",

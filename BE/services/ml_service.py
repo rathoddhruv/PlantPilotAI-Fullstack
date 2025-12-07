@@ -52,9 +52,14 @@ class MLService:
         logger.info(f"Import completed with code {result.returncode}")
         return result.stdout
 
-    def run_training(self):
+    def run_training(self, epochs=100, imgsz=960):
         """Run the active learning pipeline in non-interactive mode."""
-        cmd = [sys.executable, str(ML_PIPELINE), "--no-interactive"]
+        cmd = [
+            sys.executable, str(ML_PIPELINE), 
+            "--no-interactive", 
+            f"--epochs={epochs}", 
+            f"--imgsz={imgsz}"
+        ]
         logger.info(f"Starting training with command: {cmd}")
         
         result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")

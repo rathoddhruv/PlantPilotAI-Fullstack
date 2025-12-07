@@ -12,6 +12,20 @@ router = APIRouter()
 ML_DIR = Path(__file__).resolve().parents[2] / "ML"
 
 
+import torch
+
+@router.get("/system/info")
+def get_system_info():
+    """Return system capabilities (CUDA, etc.)"""
+    cuda = torch.cuda.is_available()
+    device_name = torch.cuda.get_device_name(0) if cuda else "CPU"
+    return {
+        "status": "online",
+        "cuda_available": cuda,
+        "device_name": device_name,
+        "torch_version": torch.__version__
+    }
+
 @router.post("/init")
 def pipeline_init():
     """run initial training from Label Studio export"""

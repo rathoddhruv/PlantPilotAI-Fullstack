@@ -21,11 +21,12 @@ def run_dev():
 
     # Start Backend
     print("🚀 Starting FastAPI Backend (Port 8000)...")
-    # We use Popen to run in parallel
+    # We use Popen to run in parallel, using CREATE_NEW_CONSOLE (0x10) to open a separate window
     be_process = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "BE.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"],
         cwd=ROOT_DIR,
-        env={**os.environ, "PYTHONPATH": str(ROOT_DIR)}
+        env={**os.environ, "PYTHONPATH": str(ROOT_DIR)},
+        creationflags=0x00000010
     )
 
     # Start Frontend

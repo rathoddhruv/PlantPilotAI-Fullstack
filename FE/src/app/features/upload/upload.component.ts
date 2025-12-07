@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ApiService, RunInfo } from '../../core/services/api.service';
 import { Router } from '@angular/router';
 import { interval } from 'rxjs';
@@ -8,7 +9,7 @@ import { startWith, switchMap } from 'rxjs/operators';
 @Component({
     selector: 'app-upload',
     standalone: true,
-    imports: [CommonModule],
+    imports: [CommonModule, FormsModule],
     templateUrl: './upload.component.html',
     styleUrls: ['./upload.component.scss']
 })
@@ -25,6 +26,13 @@ export class UploadComponent implements OnInit {
     runCount = 0;
     lastUpdate = '-';
     error = '';
+
+    datasetImages = '-';
+    datasetClasses = '-';
+
+    // Training Settings
+    trainEpochs = 40;
+    trainImgsz = 960;
 
     runs: RunInfo[] = [];
     manifest: any = null;
@@ -113,7 +121,8 @@ export class UploadComponent implements OnInit {
             if (this.progressPercent < 40) this.progressPercent += 5;
         }, 200);
 
-        this.api.initProject(file).subscribe({
+        this.addLog(`Initializing project with epochs=${this.trainEpochs}, imgsz=${this.trainImgsz} ...`);
+        this.api.initProject(file, this.trainEpochs, this.trainImgsz).subscribe({
             next: (res) => {
                 clearInterval(interval);
                 this.progressPercent = 50;
