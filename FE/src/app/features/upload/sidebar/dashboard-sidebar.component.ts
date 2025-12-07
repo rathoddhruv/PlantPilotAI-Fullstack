@@ -7,7 +7,7 @@ import { ApiService, RunInfo } from '../../../core/services/api.service';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="w-80 bg-gray-900 border-r border-gray-800 p-6 flex flex-col h-full text-gray-300">
+    <div class="w-full bg-gray-900 border-r border-gray-800 p-6 flex flex-col h-full text-gray-300">
       <!-- Header -->
       <div class="mb-8">
         <h2 class="text-xl font-bold text-white mb-1">Project Status</h2>

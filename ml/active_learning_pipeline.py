@@ -8,10 +8,13 @@ from pathlib import Path
 from datetime import datetime
 from config_loader import (
     MODEL_PATH as CONFIG_MODEL_PATH,
+)
 import torch
 
 def get_device():
     return "0" if torch.cuda.is_available() else "cpu"
+
+def _archive_existing_train():
     """move current runs/detect/train into runs/detect/archive/train_<timestamp>"""
     runs_root = Path("runs") / "detect"
     train_dir = runs_root / "train"

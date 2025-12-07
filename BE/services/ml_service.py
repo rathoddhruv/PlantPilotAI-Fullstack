@@ -8,11 +8,44 @@ from BE.settings import ML_DIR, IMPORT_ZIP_SCRIPT, ML_PIPELINE
 import logging
 logger = logging.getLogger("plantpilot")
 
+from collections import deque
+import threading
+
 class MLService:
     def __init__(self):
         self.model = None
         self.model_path = None
+        self.logs = deque(maxlen=500)
         self.load_model()
+
+    def log_message(self, msg: str):
+        logger.info(msg)
+        self.logs.append(msg)
+
+    def get_logs(self):
+        return list(self.logs)
+
+    def reset_project(self):
+        """Reset project data to fresh state."""
+        self.log_message("Resetting project data...")
+        
+        # Paths to clean
+        targets = [
+            ML_DIR / "datasets",
+            ML_DIR / "runs",
+            ML_DIR / "uploads" # If we had one here
+        ]
+        
+        for p in targets:
+            if p.exists():
+                self.log_message(f"Deleting {p}")
+                shutil.rmtree(p, ignore_errors=True)
+        
+        # Re-create empty
+        (ML_DIR / "datasets").mkdir(exist_ok=True)
+        self.model = None # Reset model in memory
+        self.load_model() # Will load base model
+        self.log_message("Project reset complete. Ready for fresh upload.")
 
     def load_model(self):
         runs_dir = ML_DIR / "runs" / "detect"
@@ -40,39 +73,53 @@ class MLService:
     def run_import_zip(self, zip_path: Path):
         """Run the import script for a Label Studio ZIP."""
         cmd = [sys.executable, str(IMPORT_ZIP_SCRIPT), str(zip_path)]
-        logger.info(f"Importing Label Studio zip from {zip_path}")
-        logger.info(f"Running import command: {cmd}")
+        self.log_message(f"Importing Label Studio zip from {zip_path}")
         
+        # We can also stream this if we want, but it's usually fast.
+        # Let's keep subprocess.run but capture output to logs.
         result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
         
         if result.returncode != 0:
-            logger.error(f"Import failed stderr: {result.stderr}")
+            self.log_message(f"Import failed: {result.stderr}")
             raise RuntimeError(f"Import failed: {result.stderr}")
             
-        logger.info(f"Import completed with code {result.returncode}")
+        self.log_message("Import completed.")
         return result.stdout
 
     def run_training(self, epochs=100, imgsz=960):
-        """Run the active learning pipeline in non-interactive mode."""
+        """Run the active learning pipeline with streaming output."""
         cmd = [
             sys.executable, str(ML_PIPELINE), 
             "--no-interactive", 
             f"--epochs={epochs}", 
             f"--imgsz={imgsz}"
         ]
-        logger.info(f"Starting training with command: {cmd}")
+        self.log_message(f"Starting training command: {' '.join(cmd)}")
         
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+        process = subprocess.Popen(
+            cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
+            text=True, 
+            encoding="utf-8",
+            bufsize=1
+        )
         
-        if result.returncode != 0:
-            logger.error(f"Training failed stderr: {result.stderr}")
-            raise RuntimeError(f"Training failed: {result.stderr}")
+        for line in process.stdout:
+            line = line.strip()
+            if line:
+                self.log_message(line)
+                
+        process.wait()
+        
+        if process.returncode != 0:
+            self.log_message(f"Training failed with code {process.returncode}")
+            raise RuntimeError(f"Training failed")
 
-        logger.info(f"Training completed with code {result.returncode}")
-        logger.info("Reloading model after training")
+        self.log_message("Training completed successfully.")
+        self.log_message("Reloading model...")
         self.load_model()
-        
-        return result.stdout
+        return "Success"
 
     def predict(self, image_path: Path, conf=0.25):
         """Run inference on a single image."""

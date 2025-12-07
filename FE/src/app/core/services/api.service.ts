@@ -84,4 +84,12 @@ export class ApiService {
     rollback(runName: string): Observable<any> {
         return this.http.post(`http://localhost:8000/pipeline/rollback?run=${runName}`, {});
     }
+
+    getLogs(): Observable<{ logs: string[] }> {
+        return this.http.get<{ logs: string[] }>(`${API_URL}/project/logs`);
+    }
+
+    resetProject(): Observable<any> {
+        return this.http.post(`${API_URL}/project/reset`, {});
+    }
 }

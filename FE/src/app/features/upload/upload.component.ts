@@ -1,11 +1,18 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService, RunInfo } from '../../core/services/api.service';
 import { Router } from '@angular/router';
-import { interval } from 'rxjs';
+import { interval, Subscription } from 'rxjs';
 import { startWith, switchMap } from 'rxjs/operators';
 import { DashboardSidebarComponent } from './sidebar/dashboard-sidebar.component';
+
+export interface LogEntry {
+    msg: string;
+    count: number;
+    time: string;
+    type: 'info' | 'error' | 'success' | 'warn';
+}
 
 @Component({
     selector: 'app-upload',
@@ -14,7 +21,7 @@ import { DashboardSidebarComponent } from './sidebar/dashboard-sidebar.component
     templateUrl: './upload.component.html',
     styleUrls: ['./upload.component.scss']
 })
-export class UploadComponent implements OnInit {
+export class UploadComponent implements OnInit, OnDestroy {
     isDragOver = false;
     status: 'idle' | 'initializing' | 'training' | 'ready' = 'idle';
 
@@ -34,24 +41,63 @@ export class UploadComponent implements OnInit {
     // Training Settings
     trainEpochs = 40;
     trainImgsz = 960;
+    isFreshStart = false;
 
     runs: RunInfo[] = [];
     manifest: any = null;
 
-    devLogs: string[] = [];
+    devLogs: LogEntry[] = [];
+    private logSub: Subscription | null = null;
+    private statusPollSub: Subscription | null = null;
+
+    // Layout State
+    sidebarWidth = 320;
+    consoleHeight = 256;
+    isResizingSidebar = false;
+    isResizingConsole = false;
 
     constructor(private api: ApiService, private router: Router) { }
 
     addLog(msg: string) {
+        // Don't manually add logs during training (polling handles it) unless it's an error
+        if (this.status === 'training' && !msg.toLowerCase().includes('error')) return;
+
+        this.pushLogEntry(msg);
+    }
+
+    private pushLogEntry(msg: string) {
         const timestamp = new Date().toLocaleTimeString();
-        this.devLogs.unshift("[" + timestamp + "] " + msg);
-        if (this.devLogs.length > 10) {
+        let type: 'info' | 'error' | 'success' | 'warn' = 'info';
+
+        const lower = msg.toLowerCase();
+        if (lower.includes('error') || lower.includes('fail')) type = 'error';
+        else if (lower.includes('success') || lower.includes('complete')) type = 'success';
+        else if (lower.includes('warn') || lower.includes('reloading')) type = 'warn';
+
+        // Grouping Check (Compare with top log)
+        if (this.devLogs.length > 0) {
+            const top = this.devLogs[0];
+            if (top.msg === msg) {
+                top.count++;
+                top.time = timestamp;
+                return;
+            }
+        }
+
+        this.devLogs.unshift({
+            msg,
+            count: 1,
+            time: timestamp,
+            type
+        });
+
+        if (this.devLogs.length > 200) {
             this.devLogs.pop();
         }
     }
 
     ngOnInit() {
-        interval(5000).pipe(
+        this.statusPollSub = interval(5000).pipe(
             startWith(0),
             switchMap(() => this.api.getRuns())
         ).subscribe({
@@ -72,6 +118,12 @@ export class UploadComponent implements OnInit {
         });
     }
 
+    ngOnDestroy() {
+        if (this.statusPollSub) this.statusPollSub.unsubscribe();
+        this.stopLogPolling();
+    }
+
+    // --- Drag & Drop ---
     onDragOver(event: DragEvent) {
         event.preventDefault();
         event.stopPropagation();
@@ -110,59 +162,54 @@ export class UploadComponent implements OnInit {
         }
     }
 
+    // --- Process Flow ---
     startZipFlow(file: File) {
         this.status = 'initializing';
-        this.statusTitle = 'Initializing Project';
-        this.statusMessage = 'Uploading & Extracting Dataset...';
+        this.statusTitle = this.isFreshStart ? 'Resetting & Initializing' : 'Initializing Project';
+        this.statusMessage = 'Uploading...';
         this.progressPercent = 10;
         this.extractedCount = 0;
 
-        // Simulate extraction progress while uploading
-        const interval = setInterval(() => {
-            if (this.progressPercent < 40) this.progressPercent += 5;
-        }, 200);
+        // Sequence: Reset (Optional) -> Init -> Poll Logs
+        const flow$ = this.isFreshStart
+            ? this.api.resetProject().pipe(switchMap(() => this.api.initProject(file, this.trainEpochs, this.trainImgsz)))
+            : this.api.initProject(file, this.trainEpochs, this.trainImgsz);
 
-        this.addLog(`Initializing project with epochs=${this.trainEpochs}, imgsz=${this.trainImgsz} ...`);
-        this.api.initProject(file, this.trainEpochs, this.trainImgsz).subscribe({
+        flow$.subscribe({
             next: (res) => {
-                clearInterval(interval);
-                this.progressPercent = 50;
-                this.extractedCount = Math.floor(Math.random() * (400 - 150) + 150); // Simulate count
-
-                this.addLog("Init success. Training started in background");
+                this.progressPercent = 30;
+                this.addLog("Init success. Training started.");
 
                 this.status = 'training';
-                this.statusTitle = 'Training Started';
-                this.statusMessage = 'Active Learning Loop Running in Background...';
+                this.statusTitle = 'Training in Progress';
+                this.statusMessage = 'Streaming logs from backend...';
 
-                // Simulate training progress visually since it's background
-                let trainP = 50;
-                const trainInt = setInterval(() => {
-                    trainP += 1;
-                    this.progressPercent = trainP;
-                    if (trainP >= 95) {
-                        clearInterval(trainInt);
-                        this.status = 'ready';
-                        this.statusTitle = 'Ready!';
-                        this.statusMessage = 'Model updated from dataset.';
+                this.startLogPolling();
 
-                        setTimeout(() => this.status = 'idle', 3000);
+                // Fake progress visual since validation takes time
+                let p = 30;
+                const int = setInterval(() => {
+                    if (this.status !== 'training') {
+                        clearInterval(int);
+                        return;
                     }
-                }, 100);
+                    if (p < 90) {
+                        p++;
+                        this.progressPercent = p;
+                    }
+                }, 1000);
             },
             error: (err: any) => {
-                clearInterval(interval);
                 this.status = 'idle';
                 const msg = err.error?.detail || err.message || "Upload failed";
-                this.error = "Initialization failed: " + msg;
-                this.addLog("Init error: " + msg);
+                this.error = "Faled: " + msg;
+                this.addLog("Error: " + msg);
             }
         });
     }
 
     startPredictionFlow(file: File) {
         this.addLog("Starting prediction for " + file.name);
-
         this.status = 'initializing';
         this.statusTitle = 'Analyzing';
         this.statusMessage = 'Running Inference...';
@@ -171,7 +218,7 @@ export class UploadComponent implements OnInit {
         this.api.predict(file).subscribe({
             next: (res: any) => {
                 this.progressPercent = 100;
-                this.addLog("Prediction success for " + file.name);
+                this.addLog("Prediction success.");
                 setTimeout(() => {
                     this.status = 'idle';
                     this.router.navigate(['/review'], { state: { prediction: res } });
@@ -179,10 +226,93 @@ export class UploadComponent implements OnInit {
             },
             error: (err: any) => {
                 this.status = 'idle';
-                const msg = err.error?.detail || err.message || "Unknown prediction error";
-                this.error = "Prediction failed: " + msg;
-                this.addLog("Prediction error: " + msg);
+                this.error = "Prediction failed: " + (err.error?.detail || err.message);
             }
         });
+    }
+
+    // --- Logging ---
+    startLogPolling() {
+        this.stopLogPolling();
+        this.logSub = interval(1000).pipe(
+            switchMap(() => this.api.getLogs())
+        ).subscribe({
+            next: (res) => {
+                if (res.logs && res.logs.length > 0) {
+                    this.devLogs = this.processBackendLogs(res.logs);
+
+                    // Check if finished
+                    if (res.logs[res.logs.length - 1].includes("Reloading model")) {
+                        this.status = 'ready';
+                        this.statusTitle = 'Training Complete';
+                        this.statusMessage = 'Model updated.';
+                        this.stopLogPolling();
+                        this.progressPercent = 100;
+                        setTimeout(() => this.status = 'idle', 3000);
+                    }
+                }
+            }
+        });
+    }
+
+    processBackendLogs(logs: string[]): LogEntry[] {
+        // Process raw strings into grouped entries
+        const entries: LogEntry[] = [];
+
+        for (const line of logs) {
+            let type: 'info' | 'error' | 'success' | 'warn' = 'info';
+            const lower = line.toLowerCase();
+            if (lower.includes('error') || lower.includes('fail')) type = 'error';
+            else if (lower.includes('success') || lower.includes('complete')) type = 'success';
+            else if (lower.includes('warn') || lower.includes('reloading')) type = 'warn';
+
+            if (entries.length > 0 && entries[entries.length - 1].msg === line) {
+                entries[entries.length - 1].count++;
+            } else {
+                entries.push({
+                    msg: line,
+                    count: 1,
+                    time: '',
+                    type
+                });
+            }
+        }
+        return entries.reverse();
+    }
+
+    stopLogPolling() {
+        if (this.logSub) {
+            this.logSub.unsubscribe();
+            this.logSub = null;
+        }
+    }
+
+    // --- Resizing Logic ---
+    startResizeSidebar(e: MouseEvent) {
+        e.preventDefault();
+        this.isResizingSidebar = true;
+    }
+
+    startResizeConsole(e: MouseEvent) {
+        e.preventDefault();
+        this.isResizingConsole = true;
+    }
+
+    @HostListener('document:mousemove', ['$event'])
+    onMouseMove(e: MouseEvent) {
+        if (this.isResizingSidebar) {
+            this.sidebarWidth = Math.max(200, Math.min(e.clientX, 600)); // Clamp 200-600
+        }
+        if (this.isResizingConsole) {
+            const containerHeight = window.innerHeight;
+            const newHeight = containerHeight - e.clientY;
+            this.consoleHeight = Math.max(100, Math.min(newHeight, 800)); // Clamp 100-800
+        }
+    }
+
+    @HostListener('document:mouseup')
+    onMouseUp() {
+        this.isResizingSidebar = false;
+        this.isResizingConsole = false;
     }
 }

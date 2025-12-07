@@ -52,3 +52,14 @@ async def trigger_training(background_tasks: BackgroundTasks):
     """
     background_tasks.add_task(ml_service.run_training)
     return {"status": "success", "message": "Training started in background."}
+
+@router.get("/logs")
+def get_logs():
+    """Return recent logs from the ML service."""
+    return {"logs": ml_service.get_logs()}
+
+@router.post("/reset")
+def reset_project():
+    """Reset all project data (datasets, runs)."""
+    ml_service.reset_project()
+    return {"status": "success", "message": "Project reset complete."}
