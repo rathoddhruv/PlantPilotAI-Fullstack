@@ -4,6 +4,9 @@ from BE.services.ml_service import MLService
 import shutil
 import logging
 import sys
+import zipfile
+import json
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -60,6 +63,62 @@ async def trigger_training(background_tasks: BackgroundTasks):
 def get_logs():
     """Return recent logs from the ML service."""
     return {"logs": ml_service.get_logs()}
+
+@router.post("/inspect-zip")
+async def inspect_zip(file: UploadFile = File(...)):
+    """
+    Inspect ZIP contents without processing.
+    Returns image count and detected classes.
+    """
+    if not file.filename.endswith(".zip"):
+        raise HTTPException(status_code=400, detail="File must be a ZIP archive")
+    
+    try:
+        # Save temp file
+        temp_path = LABEL_STUDIO_DIR / f"temp_{file.filename}"
+        LABEL_STUDIO_DIR.mkdir(parents=True, exist_ok=True)
+        
+        with temp_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Inspect ZIP
+        image_count = 0
+        classes = set()
+        
+        with zipfile.ZipFile(temp_path, 'r') as zf:
+            for name in zf.namelist():
+                # Count images
+                if name.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
+                    image_count += 1
+                
+                # Try to find Label Studio JSON
+                if name.endswith('.json') and 'result' not in name:
+                    try:
+                        content = zf.read(name).decode('utf-8')
+                        data = json.loads(content)
+                        # Extract class names from Label Studio format
+                        if isinstance(data, list):
+                            for item in data:
+                                if 'annotations' in item:
+                                    for ann in item['annotations']:
+                                        if 'result' in ann:
+                                            for res in ann['result']:
+                                                if 'value' in res and 'rectanglelabels' in res['value']:
+                                                    classes.update(res['value']['rectanglelabels'])
+                    except:
+                        pass
+        
+        # Clean up temp file
+        temp_path.unlink()
+        
+        return {
+            "image_count": image_count,
+            "classes": sorted(list(classes)) if classes else [],
+            "file_size_mb": round(temp_path.stat().st_size / (1024 * 1024), 2) if temp_path.exists() else 0
+        }
+    except Exception as e:
+        logger.exception("ZIP inspection failed")
+        raise HTTPException(status_code=500, detail=f"Failed to inspect ZIP: {str(e)}")
 
 @router.post("/reset")
 def reset_project():

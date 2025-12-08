@@ -75,9 +75,14 @@ class MLService:
         cmd = [sys.executable, str(IMPORT_ZIP_SCRIPT), str(zip_path)]
         self.log_message(f"Importing Label Studio zip from {zip_path}")
         
-        # We can also stream this if we want, but it's usually fast.
-        # Let's keep subprocess.run but capture output to logs.
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+        # Run from ML directory since script uses relative paths
+        result = subprocess.run(
+            cmd, 
+            capture_output=True, 
+            text=True, 
+            encoding="utf-8",
+            cwd=str(ML_DIR)  # CRITICAL: Run from ML directory
+        )
         
         if result.returncode != 0:
             self.log_message(f"Import failed: {result.stderr}")

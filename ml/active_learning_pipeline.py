@@ -85,8 +85,12 @@ if __name__ == '__main__':
     initial_images = Path("data/yolo_dataset/images/train")
     initial_labels = Path("data/yolo_dataset/labels/train")
     
-    valid_initial_labels = [f for f in initial_labels.glob("*.txt") if f.stat().st_size > 0]
-    if any(initial_images.glob("*")) and valid_initial_labels:
+    # Check if directories exist before trying to glob
+    valid_initial_labels = []
+    if initial_labels.exists():
+        valid_initial_labels = [f for f in initial_labels.glob("*.txt") if f.stat().st_size > 0]
+    
+    if initial_images.exists() and any(initial_images.glob("*")) and valid_initial_labels:
         print(
             "Detected initial Label Studio dataset. Training from yolo_dataset directly..."
         )
@@ -111,14 +115,14 @@ if __name__ == '__main__':
         try:
             results = model.train(
                 data=str(dataset_yaml),
-                imgsz=960,
+                imgsz=args.imgsz,  # Use CLI argument
                 device=device,
                 project="runs/detect",
                 name="train",
                 exist_ok=True,
                 resume=False,
                 val=False,
-                epochs=100,
+                epochs=args.epochs,  # Use CLI argument instead of hardcoded 100
                 lr0=0.005
             )
             print("YOLO initial training completed successfully")
@@ -158,10 +162,11 @@ if __name__ == '__main__':
     else:
         print("Skipping dataset cleanup (default behavior, no --clean flag)")
     
-    merged_images = MERGED_DATASET_ROOT / "images/train"
-    merged_labels = MERGED_DATASET_ROOT / "labels/train"
+    merged_images = dataset_root / "images/train"
+    merged_labels = dataset_root / "labels/train"
     train_images = list(merged_images.glob("*"))
     train_labels = list(merged_labels.glob("*.txt"))
+
     
     
     # === Step 2: get latest trained model path ===
@@ -182,12 +187,16 @@ if __name__ == '__main__':
         raise FileNotFoundError("No valid best.pt found in any run folder.")
     
     
+    
     try:
         MODEL_PATH = get_latest_model_path()
         print(f"MODEL USED: {MODEL_PATH}")
     except Exception as e:
         print(f"No trained model found: {e}")
-        sys.exit(1)
+        print("Active learning requires an existing trained model.")
+        print("Please upload a Label Studio ZIP file first to create the initial dataset.")
+        sys.exit(0)  # Exit gracefully, not an error
+
     
     # === Step 3: launch manual review phase ===
     # === Step 3: launch manual review phase ===
