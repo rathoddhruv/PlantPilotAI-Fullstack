@@ -7,7 +7,7 @@ import sys
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-ml_service = MLService()
+from BE.services.ml_service import ml_service
 
 @router.post("/init")
 def initialize_project(
@@ -28,22 +28,25 @@ def initialize_project(
     with destination.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    try:
-        logger.info(f"Project init called with file {file.filename}, epochs={epochs}, imgsz={imgsz}")
-        
-        # Extract and setup dataset
-        ml_service.run_import_zip(destination)
-        
-        # Trigger initial training in background via thread
-        logger.info("Starting training thread from /project/init")
-        import threading
-        t = threading.Thread(target=ml_service.run_training, args=(epochs, imgsz), daemon=True)
-        t.start()
-        
-        return {"status": "success", "message": "Project initialized. Training started in background."}
-    except Exception as e:
-        logger.exception("Project initialization failed")
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.info(f"Project init called with file {file.filename}, epochs={epochs}, imgsz={imgsz}")
+    
+    def _background_process():
+        try:
+            # Extract and setup dataset
+            ml_service.run_import_zip(destination)
+            # Trigger training
+            ml_service.run_training(epochs=epochs, imgsz=imgsz)
+        except Exception as e:
+            logger.exception("Background process failed")
+            ml_service.log_message(f"Background process error: {str(e)}")
+
+    # Trigger background thread for both import and training
+    logger.info("Starting background import/train thread")
+    import threading
+    t = threading.Thread(target=_background_process, daemon=True)
+    t.start()
+    
+    return {"status": "success", "message": "Project initialized. Processing and training started in background."}
 
 @router.post("/train")
 async def trigger_training(background_tasks: BackgroundTasks):

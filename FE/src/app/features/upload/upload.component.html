@@ -1,11 +1,11 @@
-<div class="h-full w-full flex overflow-hidden bg-gray-50 select-none">
+<div class="h-full w-full flex overflow-hidden bg-gray-50">
 
     <!-- Resizable Sidebar -->
     <div class="relative h-full flex-shrink-0 z-20 group flex" [style.width.px]="sidebarWidth">
         <app-dashboard-sidebar [runs]="runs" [manifest]="manifest" class="h-full w-full"></app-dashboard-sidebar>
 
         <!-- Sidebar Resizer Handle -->
-        <div class="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-blue-500 transition-colors z-50 bg-gray-800/50 hover:opacity-100 opacity-0 group-hover:opacity-50"
+        <div class="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-blue-500 transition-colors z-50 bg-gray-800/50 hover:opacity-100 opacity-0 group-hover:opacity-50 select-none"
             (mousedown)="startResizeSidebar($event)"></div>
     </div>
 
@@ -155,7 +155,7 @@
         </div>
 
         <!-- Console Resizer Handle -->
-        <div class="h-1.5 w-full cursor-row-resize hover:bg-blue-500 bg-gray-800 transition-colors z-50 flex-shrink-0 hover:h-2"
+        <div class="h-1.5 w-full cursor-row-resize hover:bg-blue-500 bg-gray-800 transition-colors z-50 flex-shrink-0 hover:h-2 select-none"
             (mousedown)="startResizeConsole($event)"></div>
 
         <!-- Terminal / Console Panel (Bottom Full Width) -->
