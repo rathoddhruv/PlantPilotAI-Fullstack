@@ -61,7 +61,7 @@ class MLService:
             self.model = YOLO(str(runs[0]))
             return
 
-        base = ML_DIR / "yolov8s.pt"
+        base = ML_DIR / "yolov8n.pt"
         if base.exists():
             logger.info(f"No trained run, loading base model {base}")
             self.model = YOLO(str(base))
@@ -91,13 +91,14 @@ class MLService:
         self.log_message("Import completed.")
         return result.stdout
 
-    def run_training(self, epochs=100, imgsz=960):
+    def run_training(self, epochs=100, imgsz=960, model="yolov8n.pt"):
         """Run the active learning pipeline with streaming output."""
         cmd = [
             sys.executable, str(ML_PIPELINE), 
             "--no-interactive", 
             f"--epochs={epochs}", 
-            f"--imgsz={imgsz}"
+            f"--imgsz={imgsz}",
+            f"--model={model}"
         ]
         self.log_message(f"Starting training command: {' '.join(cmd)}")
         
@@ -140,15 +141,113 @@ class MLService:
         results = self.model.predict(source=str(image_path), conf=conf, verbose=False)
         result = results[0]
         
-        detections = []
-        for box in result.boxes:
-            detections.append({
-                "class": result.names[int(box.cls)],
-                "confidence": float(box.conf),
-                "box": box.xyxy.tolist()[0] # [x1, y1, x2, y2]
-            })
+        if result.obb is not None:
+            # OBB Detection
+            logger.info("Found OBB results")
+            for obb in result.obb:
+                detections.append({
+                    "class": result.names[int(obb.cls)],
+                    "confidence": float(obb.conf),
+                    "box": obb.xyxy.tolist()[0], # Axis-aligned BBox for UI
+                    "poly": obb.xyxyxyxyn.tolist()[0] # Normalized polygon 0-1
+                })
+        elif result.masks is not None:
+             # Segmentation
+            logger.info("Found Segmentation results")
+            for i, mask in enumerate(result.masks):
+                 # result.boxes contains the bbox for each mask
+                 box = result.boxes[i].xyxy.tolist()[0]
+                 # result.masks.xyn is list of normalized segments (list of [pk, 2])
+                 # We take the first segment
+                 poly = mask.xyn[0].flatten().tolist()
+                 
+                 detections.append({
+                    "class": result.names[int(result.boxes[i].cls)],
+                    "confidence": float(result.boxes[i].conf),
+                    "box": box,
+                    "poly": poly
+                })
+        else:
+            # Standard Detection
+            for box in result.boxes:
+                detections.append({
+                    "class": result.names[int(box.cls)],
+                    "confidence": float(box.conf),
+                    "box": box.xyxy.tolist()[0] # [x1, y1, x2, y2]
+                })
             
         return detections
+
+    def save_annotation(self, filename: str, detections: list, width: int, height: int):
+        """
+        Save a user-verified annotation to the training set.
+        Moves image from uploads to dataset and creates .txt label.
+        """
+        uploads_file = ML_DIR / "data" / "test_images" / filename
+        
+        # Target directories (merged dataset)
+        train_images_dir = ML_DIR / "data" / "yolo_merged" / "images" / "train"
+        train_labels_dir = ML_DIR / "data" / "yolo_merged" / "labels" / "train"
+        
+        train_images_dir.mkdir(parents=True, exist_ok=True)
+        train_labels_dir.mkdir(parents=True, exist_ok=True)
+        
+        if not uploads_file.exists():
+            raise FileNotFoundError(f"Source file {filename} not found in uploads")
+
+        # Move image
+        target_image_path = train_images_dir / filename
+        shutil.copy2(uploads_file, target_image_path) 
+        # Note: Copy instead of move so we don't break the frontend 'current' view immediately if they refresh? 
+        # Actually move is cleaner for 'inbox' style, but let's copy to be safe.
+        
+        # Create Label File (YOLO format: class_id x_center y_center width height)
+        # detections items: { class, box: [x1,y1,x2,y2] }
+        # Need to map class names to IDs.
+        # We assume self.model.names exists.
+        
+        label_path = train_labels_dir / f"{Path(filename).stem}.txt"
+        
+        if not self.model:
+            self.load_model()
+            
+        # Create reverse map for names
+        name_to_id = {v: k for k, v in self.model.names.items()}
+        
+        with label_path.open("w") as f:
+            for det in detections:
+                class_name = det['class']
+                if class_name not in name_to_id:
+                    logger.warning(f"Unknown class {class_name}, skipping")
+                    continue
+                
+                cid = name_to_id[class_name]
+                if 'poly' in det and det['poly']:
+                    # OBB/Seg Format: class x1 y1 x2 y2 ... (normalized)
+                    poly_str = " ".join([f"{p:.6f}" for p in det['poly']])
+                    f.write(f"{cid} {poly_str}\n")
+                else:
+                    # Standard Box Format: class xc yc w h (normalized)
+                    x1, y1, x2, y2 = det['box']
+                    
+                    # Normalize to 0-1
+                    dw = 1.0 / width
+                    dh = 1.0 / height
+                    
+                    w = x2 - x1
+                    h = y2 - y1
+                    cx = x1 + (w / 2)
+                    cy = y1 + (h / 2)
+                    
+                    cx *= dw
+                    cy *= dh
+                    w *= dw
+                    h *= dh
+                    
+                    f.write(f"{cid} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}\n")
+                
+        self.log_message(f"Saved annotation for {filename} with {len(detections)} labels")
+        return True
 
 # Singleton instance
 ml_service = MLService()

@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { interval, Subscription } from 'rxjs';
 import { startWith, switchMap } from 'rxjs/operators';
 import { DashboardSidebarComponent } from './sidebar/dashboard-sidebar.component';
+import { ReviewQueueService } from '../../core/services/review-queue.service';
 
 export interface LogEntry {
     msg: string;
@@ -41,6 +42,7 @@ export class UploadComponent implements OnInit, OnDestroy {
     // Training Settings
     trainEpochs = 40;
     trainImgsz = 960;
+    trainModel = 'yolov8n.pt';
     isFreshStart = false;
 
     runs: RunInfo[] = [];
@@ -56,7 +58,11 @@ export class UploadComponent implements OnInit, OnDestroy {
     isResizingSidebar = false;
     isResizingConsole = false;
 
-    constructor(private api: ApiService, private router: Router) { }
+    constructor(
+        private api: ApiService,
+        private router: Router,
+        private reviewQueue: ReviewQueueService
+    ) { }
 
     addLog(msg: string) {
         // Don't manually add logs during training (polling handles it) unless it's an error
@@ -141,25 +147,40 @@ export class UploadComponent implements OnInit, OnDestroy {
         event.stopPropagation();
         this.isDragOver = false;
         const files = event.dataTransfer?.files;
-        if (files && files.length > 0) this.handleFile(files[0]);
+        if (files && files.length > 0) this.handleFiles(files);
     }
 
     onFileSelected(event: any) {
-        const file = event.target.files[0];
-        if (file) this.handleFile(file);
+        const files = event.target.files;
+        if (files && files.length > 0) this.handleFiles(files);
     }
 
-    handleFile(file: File) {
+    handleFiles(fileList: FileList) {
         this.error = '';
-        this.addLog("File dropped: " + file.name + " type=" + file.type);
+        const files = Array.from(fileList);
 
-        if (file.name.endsWith('.zip')) {
-            this.startZipFlow(file);
-        } else if (file.type.startsWith('image/')) {
-            this.startPredictionFlow(file);
-        } else {
-            this.error = 'Unsupported file type. Use ZIP for training or Image for prediction.';
+        // Check for ZIP (Training Mode) - Enforce single file for now
+        const zipFile = files.find(f => f.name.endsWith('.zip'));
+        if (zipFile) {
+            if (files.length > 1) {
+                this.error = 'Please upload only one ZIP file at a time for training.';
+                return;
+            }
+            this.addLog("ZIP file dropped: " + zipFile.name);
+            this.startZipFlow(zipFile);
+            return;
         }
+
+        // Check for Images (Prediction Mode)
+        const imageFiles = files.filter(f => f.type.startsWith('image/'));
+        if (imageFiles.length === 0) {
+            this.error = 'No valid images found. Use ZIP for training or Images for prediction.';
+            return;
+        }
+
+        this.addLog(`Queueing ${imageFiles.length} images for review.`);
+        this.reviewQueue.addFiles(imageFiles);
+        this.router.navigate(['/review']);
     }
 
     // --- Process Flow ---
@@ -172,8 +193,8 @@ export class UploadComponent implements OnInit, OnDestroy {
 
         // Sequence: Reset (Optional) -> Init -> Poll Logs
         const flow$ = this.isFreshStart
-            ? this.api.resetProject().pipe(switchMap(() => this.api.initProject(file, this.trainEpochs, this.trainImgsz)))
-            : this.api.initProject(file, this.trainEpochs, this.trainImgsz);
+            ? this.api.resetProject().pipe(switchMap(() => this.api.initProject(file, this.trainEpochs, this.trainImgsz, this.trainModel)))
+            : this.api.initProject(file, this.trainEpochs, this.trainImgsz, this.trainModel);
 
         flow$.subscribe({
             next: (res) => {

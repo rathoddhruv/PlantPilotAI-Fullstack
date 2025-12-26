@@ -11,6 +11,7 @@ export interface Detection {
     class: string;
     confidence: number;
     box: [number, number, number, number]; // x1, y1, x2, y2
+    ignore?: boolean;
 }
 
 export interface PredictionResult {
@@ -52,11 +53,12 @@ export class ApiService {
 
     constructor(private http: HttpClient) { }
 
-    initProject(file: File, epochs: number = 100, imgsz: number = 960): Observable<any> {
+    initProject(file: File, epochs: number = 100, imgsz: number = 960, model: string = 'yolov8n.pt'): Observable<any> {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('epochs', epochs.toString());
         formData.append('imgsz', imgsz.toString());
+        formData.append('model', model);
         return this.http.post(`${API_URL}/project/init`, formData);
     }
 
@@ -69,6 +71,10 @@ export class ApiService {
     triggerTraining(): Observable<any> {
         // Calling project/train which triggers background task
         return this.http.post(`${API_URL}/project/train`, {});
+    }
+
+    saveAnnotation(filename: string, detections: any[], width: number, height: number): Observable<any> {
+        return this.http.post(`${API_URL}/project/annotate`, { filename, detections, width, height });
     }
 
     getRuns(): Observable<RunsResponse> {

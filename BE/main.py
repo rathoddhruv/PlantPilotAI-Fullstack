@@ -26,9 +26,11 @@ app.add_middleware(
 # Ensure upload dir exists for static mounting
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-# Mount uploads as well so we can serve images
-app.mount("/static/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+# Mount uploads directly at /uploads to avoid conflict with /static
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
+# Mount static files if directory exists, otherwise ignore or warn
+# (Removed broken /static mount since directory "static" did not exist in ls output)
 
 app.include_router(project.router, prefix="/api/v1/project", tags=["project"])
 app.include_router(inference.router, prefix="/api/v1/inference", tags=["inference"])

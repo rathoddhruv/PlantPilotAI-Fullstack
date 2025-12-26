@@ -28,7 +28,7 @@ async def predict_image(file: UploadFile = File(...)):
         detections = ml_service.predict(file_path)
         return {
             "filename": filename,
-            "url": f"/static/uploads/{filename}", # Assuming we mount static
+            "url": f"/uploads/{filename}", 
             "detections": detections
         }
     except Exception as e:

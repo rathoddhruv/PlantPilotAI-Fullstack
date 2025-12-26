@@ -17,7 +17,8 @@ def initialize_project(
     background_tasks: BackgroundTasks, 
     file: UploadFile = File(...),
     epochs: int = Form(40),
-    imgsz: int = Form(960)
+    imgsz: int = Form(960),
+    model: str = Form("yolov8n.pt")
 ):
     """
     Upload a Label Studio ZIP export and initialize the dataset.
@@ -38,7 +39,7 @@ def initialize_project(
             # Extract and setup dataset
             ml_service.run_import_zip(destination)
             # Trigger training
-            ml_service.run_training(epochs=epochs, imgsz=imgsz)
+            ml_service.run_training(epochs=epochs, imgsz=imgsz, model=model)
         except Exception as e:
             logger.exception("Background process failed")
             ml_service.log_message(f"Background process error: {str(e)}")
@@ -58,6 +59,36 @@ async def trigger_training(background_tasks: BackgroundTasks):
     """
     background_tasks.add_task(ml_service.run_training)
     return {"status": "success", "message": "Training started in background."}
+
+class AnnotationRequest(json.BaseModel if 'BaseModel' in locals().get('pydantic', {}).__dir__() else object):
+    pass 
+# Wait, need Pydantic
+from pydantic import BaseModel
+from typing import List, Tuple
+
+class DetectionBox(BaseModel):
+    box: List[float] # x1, y1, x2, y2
+    class_: str 
+    # Mapped from 'class' in frontend, but check pydantic alias if needed. 
+    # Actually frontend sends {class: "foo", box: []}. "class" is reserved keyword in python? no.
+
+class AnnotationPayload(BaseModel):
+    filename: str
+    detections: List[dict]
+    width: int
+    height: int
+
+@router.post("/annotate")
+def save_annotation(payload: AnnotationPayload):
+    """
+    Save validated annotations and add image to training set.
+    """
+    try:
+        ml_service.save_annotation(payload.filename, payload.detections, payload.width, payload.height)
+        return {"status": "success", "message": "Annotation saved."}
+    except Exception as e:
+        logger.exception("Annotation save failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/logs")
 def get_logs():

@@ -105,6 +105,29 @@
                                 <input [(ngModel)]="trainImgsz" type="number"
                                     class="border border-gray-200 p-1 rounded w-16 text-center font-bold text-gray-700 bg-gray-50 focus:ring-2 focus:ring-blue-400 outline-none transition-all">
                             </label>
+
+                            <label
+                                class="flex items-center gap-2 cursor-pointer hover:text-purple-600 transition-colors">
+                                <span class="font-bold text-xs">MODEL</span>
+                                <select [(ngModel)]="trainModel"
+                                    class="border border-gray-200 p-1 rounded w-24 font-bold text-gray-700 bg-gray-50 focus:ring-2 focus:ring-purple-400 outline-none transition-all text-xs">
+                                    <option value="yolov8n.pt">YOLOv8n</option>
+                                    <option value="yolov8s.pt">YOLOv8s</option>
+                                    <option value="yolov8l.pt">YOLOv8l</option>
+                                    <option value="yolov11n.pt">YOLOv11n</option>
+
+                                    <optgroup label="OBB">
+                                        <option value="yolov8n-obb.pt">YOLOv8n-OBB</option>
+                                        <option value="yolov8s-obb.pt">YOLOv8s-OBB</option>
+                                        <option value="yolov11n-obb.pt">YOLOv11n-OBB</option>
+                                    </optgroup>
+
+                                    <optgroup label="Segmentation">
+                                        <option value="yolov8n-seg.pt">YOLOv8n-Seg</option>
+                                        <option value="yolov8s-seg.pt">YOLOv8s-Seg</option>
+                                    </optgroup>
+                                </select>
+                            </label>
                         </div>
 
                         <!-- Fresh Start Toggle -->
@@ -141,7 +164,7 @@
                         </p>
                         <p class="text-xs text-gray-400 mt-1">Supports Label Studio Export</p>
                     </div>
-                    <input type="file" #fileInput (change)="onFileSelected($event)" class="hidden" />
+                    <input type="file" multiple #fileInput (change)="onFileSelected($event)" class="hidden" />
                 </div>
 
                 <!-- Error -->

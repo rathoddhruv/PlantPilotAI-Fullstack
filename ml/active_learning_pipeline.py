@@ -75,8 +75,16 @@ if __name__ == '__main__':
     )
     parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs")
     parser.add_argument("--imgsz", type=int, default=960, help="Image size for training")
+    parser.add_argument("--model", type=str, default="yolov8n.pt", help="Base model (e.g. yolov8n.pt, yolov8s.pt)")
     args = parser.parse_args()
     
+    def get_task(model_name: str) -> str:
+        if "obb" in model_name:
+            return "obb"
+        if "seg" in model_name:
+            return "segment"
+        return "detect"
+
     # === Step 0.5: Handle initial training from Label Studio dataset ===
     # if original dataset is present, train once, then rename folder to avoid retraining
     dataset_root = Path("data/yolo_merged")
@@ -104,16 +112,25 @@ if __name__ == '__main__':
         # always write artifacts to a stable folder under ml/runs/detect/train
         _archive_existing_train()  # move previous 'train' to archive if it exists
     
-        print("Starting YOLO training with initial dataset...")
+        print(f"Starting YOLO training with initial dataset using {args.model}...")
         
         # Use Python API instead of CLI to ensure correct Python environment with CUDA
         from ultralytics import YOLO
         
-        model = YOLO("yolov8s.pt")
+        # Check if model string is a path
+        model_name = args.model
+        if not model_name.endswith('.pt'):
+             model_name += '.pt'
+        
+        task_type = get_task(model_name)
+        print(f"Inferred task type: {task_type}")
+
+        model = YOLO(model_name)
         device = get_device()  # "0" if CUDA available, else "cpu"
         
         try:
             results = model.train(
+                task=task_type,
                 data=str(dataset_yaml),
                 imgsz=args.imgsz,  # Use CLI argument
                 device=device,
@@ -166,8 +183,7 @@ if __name__ == '__main__':
     merged_labels = dataset_root / "labels/train"
     train_images = list(merged_images.glob("*"))
     train_labels = list(merged_labels.glob("*.txt"))
-
-    
+ 
     
     # === Step 2: get latest trained model path ===
     def get_latest_model_path(base_dir="runs/detect"):
@@ -196,7 +212,7 @@ if __name__ == '__main__':
         print("Active learning requires an existing trained model.")
         print("Please upload a Label Studio ZIP file first to create the initial dataset.")
         sys.exit(0)  # Exit gracefully, not an error
-
+ 
     
     # === Step 3: launch manual review phase ===
     # === Step 3: launch manual review phase ===
@@ -251,7 +267,7 @@ if __name__ == '__main__':
     print("Normalizing label coordinates before training...")
     
     # make the backup folder empty to avoid FileExistsError on Windows
-    backup_dir = MERGED_DATASET_ROOT / "labels" / "backup_non_normalized"
+    backup_dir = Path(str(dataset_root)) / "labels" / "backup_non_normalized" # fixed variable name
     shutil.rmtree(backup_dir, ignore_errors=True)
     backup_dir.mkdir(parents=True, exist_ok=True)
     
@@ -263,6 +279,13 @@ if __name__ == '__main__':
     if not train_images or not train_labels:
         print("No training data found. Skipping training.")
     else:
+        # Determine task for fine-tuning based on MODEL_PATH (which might not have name)
+        # Or better, use args.model since we assume consistent model family?
+        # Actually, if we are fine-tuning `best.pt`, we don't know if it's OBB/SEG from the filename 'best.pt'.
+        # However, we can use args.model as a hint, assuming user keeps using same architecture.
+        # Or `get_task` on `args.model`.
+        task_type = get_task(args.model) 
+        
         print(f"Found {len(train_images)} images and {len(train_labels)} labels.")
         # force stable save path under ml/runs/detect/train
         TRAIN_STABLE = Path("runs") / "detect" / "train"
@@ -270,19 +293,20 @@ if __name__ == '__main__':
             shutil.rmtree(TRAIN_STABLE, ignore_errors=True)
     
         train_args = [
+            sys.executable, "-m", "ultralytics", 
             "yolo",
-            "task=detect",
+            f"task={task_type}",
             "mode=train",
-            "model=yolov8s.pt",
+            f"model={MODEL_PATH}", # FIX: Use MODEL_PATH for fine-tuning!
             f"data={dataset_yaml}",
-            "imgsz=960",
+            f"imgsz={args.imgsz}",
             "device=0",
             "project=runs/detect",  # stable root
             "name=train",  # always 'train'
             "exist_ok=True",
             "resume=False",
             "val=False",
-            "epochs=100",  # increased epochs for better training
+            f"epochs={args.epochs}",  # increased epochs for better training
             "lr0=0.005",   # initial learning rate
         ]
     
