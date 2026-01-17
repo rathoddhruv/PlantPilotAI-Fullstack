@@ -4,7 +4,7 @@ echo.
 
 REM Install dependencies
 echo 📦 Installing Python dependencies...
-python -m pip install "numpy<2" opencv-python pillow ultralytics pyyaml fastapi uvicorn --quiet
+python -m pip install "numpy<2" opencv-python pillow ultralytics pyyaml fastapi uvicorn python-multipart --quiet
 
 REM Start Backend in new window
 echo 🚀 Starting Backend (Port 8000)...
