@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../core/services/api.service';
-import { interval, Subscription, switchMap, startWith } from 'rxjs';
+import { interval, Subscription, switchMap } from 'rxjs';
 
 export interface LogEntry {
     msg: string;
@@ -29,8 +29,13 @@ export interface LogEntry {
               <span class="text-gray-600">~ backend-stream</span>
               <span class="text-[10px] text-gray-500 ml-2" *ngIf="!autoScroll">(Auto-scroll Paused)</span>
           </div>
-          <div class="text-[10px] text-gray-600 flex gap-4">
-              <span>{{ devLogs.length }} LINES</span>
+          <div class="flex items-center gap-4">
+              <button (click)="clearLogs()" class="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-[10px] text-gray-300 transition-colors">
+                  Clear
+              </button>
+              <div class="text-[10px] text-gray-600 flex gap-4">
+                 <span>{{ devLogs.length }} LINES</span>
+              </div>
           </div>
       </div>
 
@@ -77,7 +82,6 @@ export class LogPanelComponent implements OnInit, OnDestroy {
     constructor(private api: ApiService) { }
 
     ngOnInit() {
-        // Poll logs every 2.5 seconds
         this.logSub = interval(2500).pipe(
             switchMap(() => this.api.getLogs())
         ).subscribe({
@@ -90,34 +94,12 @@ export class LogPanelComponent implements OnInit, OnDestroy {
     }
 
     processLogs(logs: string[]) {
-        // Filter out internal polling logs to reduce noise
         const filtered = logs.filter(line =>
             !line.includes('/api/v1/project/logs') &&
             !line.includes('/pipeline/runs')
         );
 
-        const newEntries: LogEntry[] = [];
-        let updated = false;
-
-        // Only process if we have logs
         if (filtered.length === 0) return;
-
-        // Optimization: We re-process seemingly all logs from backend? 
-        // Assuming backend sends *recent* buffer. We need to append or replace.
-        // Based on previous implementation, it seemed to replace or we append strictly new?
-        // The backend `getLogs` usually returns the full buffer or a tail.
-        // Let's assume we receive a fresh batch and we dedup against OUR last entry.
-        // Actually, if backend returns the SAME buffer every time (stream history), we should handle it.
-        // But typically we treated it as "current buffer".
-        // Let's stick to the previous implementation: REBUILD from the response, assuming response is the "latest window".
-        // Wait, if it's the "latest window", replacing `devLogs` entirely causes jitter.
-        // The previous implementation (Step 246) did: `this.devLogs = this.processBackendLogs(res.logs);`
-        // It replaced the array entirely every second. This is inefficient but simple.
-        // I Will stick to replacing for now to ensure consistency, but if user scrolls up, replacement might jump.
-        // *Correction*: Replacing the array might reset scroll position if angular re-renders everything.
-        // `trackBy` would help. Or just appending new lines.
-        // Since I don't know the backend behavior (does it clear logs?), I'll stick to replacement but add trackBy logic if I could.
-        // Actually, I'll use the existing logic but check for scroll preservation.
 
         const entries: LogEntry[] = [];
         for (const line of filtered) {
@@ -139,18 +121,7 @@ export class LogPanelComponent implements OnInit, OnDestroy {
             }
         }
 
-        // Reverse to show newest first?
-        // Previous implementation: `return entries.reverse();` (Step 246).
-        // If we reverse, newest is at TOP.
-        // If newest is at top, `scrollToBottom` logic is inverted (scrollToTop).
-        // Usually Console logs are Oldest at Top, Newest at Bottom.
-        // If `entries.reverse()` was used, then Newest provided by backend (if backend sends oldest->newest) would became Newest->Oldest.
-        // Let's check visual: "Live Logs" usually scroll down.
-        // I will NOT reverse, so Oldest -> Newest. (Standard console).
-        // IF the backend sends Newest First, then I don't need to reverse.
-        // Assuming backend sends chronological list.
-
-        this.devLogs = entries; // Oldest at top, newest at bottom
+        this.devLogs = entries;
 
         setTimeout(() => {
             if (this.autoScroll) {
@@ -159,9 +130,15 @@ export class LogPanelComponent implements OnInit, OnDestroy {
         });
     }
 
+    clearLogs() {
+        this.devLogs = [];
+    }
+
     scrollToBottom(): void {
         try {
-            this.scrollContainer.nativeElement.scrollTop = this.scrollContainer.nativeElement.scrollHeight;
+            if (this.scrollContainer) {
+                this.scrollContainer.nativeElement.scrollTop = this.scrollContainer.nativeElement.scrollHeight;
+            }
         } catch (err) { }
     }
 
@@ -173,19 +150,13 @@ export class LogPanelComponent implements OnInit, OnDestroy {
         if (atBottom) {
             this.autoScroll = true;
         } else {
-            // If user scrolls up, disable autoscroll
             this.autoScroll = false;
         }
     }
 
-    // Resizing Logic
     @HostListener('document:mousemove', ['$event'])
     onMouseMove(event: MouseEvent) {
         if (!this.isResizing) return;
-        // Calculate new height: It's at bottom, so dy is inverted relative to height increase
-        // Mouse moving UP increases height.
-        // We need initial Y or just allow delta.
-        // Simplification: window.innerHeight - event.clientY
         const newHeight = window.innerHeight - event.clientY;
         if (newHeight > 50 && newHeight < 600) {
             this.height = newHeight;

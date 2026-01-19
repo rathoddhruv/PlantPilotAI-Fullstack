@@ -174,7 +174,8 @@ if __name__ == '__main__':
                 resume=False,
                 val=False,
                 epochs=args.epochs,  # Use CLI argument instead of hardcoded 100
-                lr0=0.005
+                lr0=0.005,
+                amp=False  # Disable AMP to avoid 'Half' precision errors on some devices
             )
             print("YOLO initial training completed successfully")
         except Exception as e:
@@ -342,6 +343,7 @@ if __name__ == '__main__':
             "val=False",
             f"epochs={args.epochs}",  # increased epochs for better training
             "lr0=0.005",   # initial learning rate
+            "amp=False",   # Disable AMP
         ]
     
         print(f"Running YOLO training (Fine-tuning from {MODEL_PATH})...")
