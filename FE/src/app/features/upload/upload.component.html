@@ -1,13 +1,8 @@
 <div class="h-full w-full flex overflow-hidden bg-gray-50">
 
-    <!-- Resizable Sidebar -->
-    <div class="relative h-full flex-shrink-0 z-20 group flex" [style.width.px]="sidebarWidth">
-        <app-dashboard-sidebar [runs]="runs" [manifest]="manifest" class="h-full w-full"></app-dashboard-sidebar>
+    <!-- Resizable Sidebar Removed -->
 
-        <!-- Sidebar Resizer Handle -->
-        <div class="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-blue-500 transition-colors z-50 bg-gray-800/50 hover:opacity-100 opacity-0 group-hover:opacity-50 select-none"
-            (mousedown)="startResizeSidebar($event)"></div>
-    </div>
+    <!-- Right Side: Main Content + Console -->
 
     <!-- Right Side: Main Content + Console -->
     <div class="flex-1 relative h-full flex flex-col overflow-hidden">
@@ -177,59 +172,7 @@
             <p class="mt-6 text-xs text-gray-400 font-mono">Run #{{ runCount }} • Last Update: {{ lastUpdate }}</p>
         </div>
 
-        <!-- Console Resizer Handle -->
-        <div class="h-1.5 w-full cursor-row-resize hover:bg-blue-500 bg-gray-800 transition-colors z-50 flex-shrink-0 hover:h-2 select-none"
-            (mousedown)="startResizeConsole($event)"></div>
-
-        <!-- Terminal / Console Panel (Bottom Full Width) -->
-        <div class="relative z-20 bg-[#0d1117] text-gray-400 font-mono text-xs flex flex-col flex-shrink-0 transition-none shadow-[0_-4px_20px_rgba(0,0,0,0.3)]"
-            [style.height.px]="consoleHeight">
-
-            <!-- Terminal Header -->
-            <div class="flex items-center justify-between px-4 py-2 bg-[#161b22] border-b border-gray-800 select-none">
-                <div class="flex items-center gap-2">
-                    <div class="flex gap-1.5">
-                        <div class="w-2.5 h-2.5 rounded-full bg-red-500/50"></div>
-                        <div class="w-2.5 h-2.5 rounded-full bg-yellow-500/50"></div>
-                        <div class="w-2.5 h-2.5 rounded-full bg-green-500/50"></div>
-                    </div>
-                    <span class="ml-3 font-bold text-gray-300">DEV CONSOLE</span>
-                    <span class="text-gray-600">~ backend-stream</span>
-                    <div *ngIf="status === 'training'" class="flex items-center gap-2 ml-4">
-                        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                        <span class="text-green-500 font-bold">LIVE</span>
-                    </div>
-                </div>
-                <div class="text-[10px] text-gray-600 flex gap-4">
-                    <span>HISTORY: 200 LINES</span>
-                    <span>UTF-8</span>
-                </div>
-            </div>
-
-            <!-- Log Output -->
-            <div
-                class="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent font-medium bg-[#0d1117]">
-                <div *ngFor="let log of devLogs; let i = index"
-                    class="hover:bg-gray-800/30 px-1 rounded transition-colors break-words flex items-start">
-                    <span class="text-gray-600 mr-2 select-none w-8 text-right flex-shrink-0">{{ devLogs.length - i
-                        }}.</span>
-                    <span class="flex-1" [class.text-red-400]="log.type === 'error'"
-                        [class.text-green-400]="log.type === 'success'" [class.text-blue-400]="log.type === 'info'"
-                        [class.text-yellow-400]="log.type === 'warn'">
-                        {{ log.msg }}
-                        <span *ngIf="log.count > 1"
-                            class="ml-2 bg-gray-700 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold select-none">x{{
-                            log.count }}</span>
-                    </span>
-                    <span class="text-gray-700 text-[10px] ml-2 select-none">{{ log.time }}</span>
-                </div>
-                <div *ngIf="devLogs.length === 0"
-                    class="h-full flex flex-col items-center justify-center text-gray-700 opacity-50">
-                    <span class="text-4xl mb-2">⌨️</span>
-                    <p>Waiting for events...</p>
-                </div>
-            </div>
-        </div>
+        <!-- Console Removed -->
 
     </div>
 </div>

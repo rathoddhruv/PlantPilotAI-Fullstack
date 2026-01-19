@@ -31,12 +31,17 @@
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide">Detections ({{
                         prediction.detections.length }})</h3>
-                    <div class="space-x-2">
+                    <div class="space-x-4 flex items-center">
+                        <label class="flex items-center space-x-2 cursor-pointer group">
+                            <input type="checkbox" (change)="markAll($any($event.target).checked)"
+                                class="w-4 h-4 text-green-600 rounded focus:ring-green-500 border-gray-300 cursor-pointer">
+                            <span class="text-xs font-bold text-gray-600 group-hover:text-green-700">Select All</span>
+                        </label>
+
+                        <div class="h-4 w-px bg-gray-300"></div>
+
                         <button (click)="markAll(true)" class="text-xs text-green-600 font-bold hover:underline">Mark
                             All Correct</button>
-                        <span class="text-gray-300">|</span>
-                        <button (click)="markAll(false)" class="text-xs text-red-500 font-bold hover:underline">Mark All
-                            Wrong</button>
                     </div>
                 </div>
 

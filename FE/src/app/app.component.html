@@ -1,14 +1,18 @@
 <div class="flex h-screen overflow-hidden bg-gray-50 font-sans text-gray-900">
   <app-toast></app-toast>
 
-  <!-- Main Content Area -->
-  <main class="flex-1 relative overflow-auto scroll-smooth">
-    <router-outlet></router-outlet>
-  </main>
-
-  <!-- Persistent Right Sidebar -->
-  <aside class="w-80 flex-shrink-0 z-30 h-full border-l border-gray-200 bg-white shadow-xl relative">
+  <!-- Persistent Left Sidebar -->
+  <aside class="w-80 flex-shrink-0 z-30 h-full border-r border-gray-200 bg-white shadow-xl relative">
     <app-training-sidebar></app-training-sidebar>
   </aside>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 relative overflow-hidden flex flex-col">
+    <div class="flex-1 relative overflow-auto scroll-smooth">
+      <router-outlet></router-outlet>
+    </div>
+    <!-- Global Console -->
+    <app-log-panel></app-log-panel>
+  </main>
 
 </div>

@@ -61,9 +61,43 @@ if __name__ == '__main__':
     THIS_DIR = Path(__file__).resolve().parent
     os.chdir(THIS_DIR)
     
+    
     # absolute yaml paths avoid accidental cross-repo references
     YOLO_DATASET_YAML_ABS = str((THIS_DIR / "yolo_dataset.yaml").resolve())
     YOLO_MERGED_YAML_ABS = str((THIS_DIR / "yolo_merged.yaml").resolve())
+
+    def update_yaml_path(yaml_path, rel_data_path):
+        """Force absolute path in YAML to avoid Ultralytics settings interference"""
+        try:
+            p = Path(yaml_path)
+            if not p.exists(): return
+            
+            lines = p.read_text(encoding='utf-8').splitlines()
+            new_lines = []
+            
+            abs_data_path = (THIS_DIR / rel_data_path).resolve()
+            
+            path_updated = False
+            for line in lines:
+                if line.strip().startswith('path:'):
+                    new_lines.append(f"path: {abs_data_path}")
+                    path_updated = True
+                else:
+                    new_lines.append(line)
+            
+            if not path_updated:
+                # If path key was missing, prepend it
+                new_lines.insert(0, f"path: {abs_data_path}")
+                
+            p.write_text("\n".join(new_lines), encoding='utf-8')
+            print(f"Updated {yaml_path} with absolute path: {abs_data_path}")
+        except Exception as e:
+            print(f"Failed to update YAML path: {e}")
+
+    # Ensure YAMLs point to the correct absolute paths
+    update_yaml_path(YOLO_DATASET_YAML_ABS, "data/yolo_dataset")
+    update_yaml_path(YOLO_MERGED_YAML_ABS, "data/yolo_merged")
+    
     
     # === CLI args ===
     parser = argparse.ArgumentParser()
@@ -313,10 +347,7 @@ if __name__ == '__main__':
         print(f"Running YOLO training (Fine-tuning from {MODEL_PATH})...")
         result = subprocess.run(
             train_args,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+            check=False # Allow it to fail without raising immediate exception, we handle returncode
         )
     
         if result.returncode != 0:
