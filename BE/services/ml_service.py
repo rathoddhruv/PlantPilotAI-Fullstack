@@ -59,12 +59,19 @@ class MLService:
         if runs:
             logger.info(f"Loading trained best.pt from {runs[0]}")
             self.model = YOLO(str(runs[0]))
+            self.model_path = runs[0].name # Just filename or full path? Filename is safer for UI.
+            # Actually, user wants to know WHICH run. "train_.../best.pt" or run name "train3"
+            # runs[0] is .../runs/detect/train3/weights/best.pt
+            # Helpful format: "train3 (best.pt)"
+            run_name = runs[0].parent.parent.name
+            self.model_path = f"{run_name}/{runs[0].name}"
             return
 
         base = ML_DIR / "yolov8n.pt"
         if base.exists():
             logger.info(f"No trained run, loading base model {base}")
             self.model = YOLO(str(base))
+            self.model_path = "yolov8n.pt (Base)"
             return
 
         logger.error("No model file found at runs or base. Inference will fail.")
@@ -178,10 +185,33 @@ class MLService:
             
         return detections
 
+    import yaml
+
+    def get_classes(self):
+        """Read classes from yolo_dataset.yaml."""
+        try:
+            yaml_path = ML_DIR / "data" / "yolo_dataset" / "dataset.yaml" # Wait, actual path is ML_DIR / "yolo_dataset.yaml"
+            # In active_learning_pipeline.py: YOLO_DATASET_YAML_ABS = THIS_DIR / "yolo_dataset.yaml"
+            yaml_path = ML_DIR / "yolo_dataset.yaml"
+            
+            if not yaml_path.exists():
+                return []
+                
+            with open(yaml_path, 'r') as f:
+                data = yaml.safe_load(f)
+                
+            if 'names' in data:
+                return [data['names'][i] for i in sorted(data['names'].keys())]
+            return []
+        except Exception as e:
+            logger.error(f"Failed to read classes: {e}")
+            return []
+
     def save_annotation(self, filename: str, detections: list, width: int, height: int):
         """
         Save a user-verified annotation to the training set.
         Moves image from uploads to dataset and creates .txt label.
+        Automatically adds new classes to yolo_dataset.yaml.
         """
         uploads_file = ML_DIR / "data" / "test_images" / filename
         
@@ -198,36 +228,57 @@ class MLService:
         # Move image
         target_image_path = train_images_dir / filename
         shutil.copy2(uploads_file, target_image_path) 
-        # Note: Copy instead of move so we don't break the frontend 'current' view immediately if they refresh? 
-        # Actually move is cleaner for 'inbox' style, but let's copy to be safe.
         
-        # Create Label File (YOLO format: class_id x_center y_center width height)
-        # detections items: { class, box: [x1,y1,x2,y2] }
-        # Need to map class names to IDs.
-        # We assume self.model.names exists.
+        # Update YAML if new classes found
+        yaml_path = ML_DIR / "yolo_dataset.yaml"
+        current_names = {}
         
-        label_path = train_labels_dir / f"{Path(filename).stem}.txt"
+        if yaml_path.exists():
+            with open(yaml_path, 'r') as f:
+                yaml_data = yaml.safe_load(f)
+                current_names = yaml_data.get('names', {})
         
-        if not self.model:
-            self.load_model()
+        # Invert names for lookup
+        name_to_id = {v: k for k, v in current_names.items()}
+        next_id = max(current_names.keys()) + 1 if current_names else 0
+        
+        updated_yaml = False
+        for det in detections:
+            class_name = det['class']
+            if class_name not in name_to_id:
+                logger.info(f"New class detected: {class_name}. Adding to dataset.")
+                name_to_id[class_name] = next_id
+                current_names[next_id] = class_name
+                next_id += 1
+                updated_yaml = True
+        
+        if updated_yaml:
+            with open(yaml_path, 'w') as f:
+                yaml_data['names'] = current_names
+                yaml.dump(yaml_data, f, sort_keys=False)
             
-        # Create reverse map for names
-        name_to_id = {v: k for k, v in self.model.names.items()}
+            # Also update the merged YAML if it exists to keep them in sync? 
+            # active_learning_pipeline handles merging, but keeping yolo_dataset.yaml as source of truth is key.
+            # We should probably reload the model if classes changed, but simple save is enough for next training cycle.
+            self.log_message(f"Updated dataset YAML with new classes: {list(current_names.values())}")
+
+        # Now write labels
+        label_path = train_labels_dir / f"{Path(filename).stem}.txt"
         
         with label_path.open("w") as f:
             for det in detections:
                 class_name = det['class']
                 if class_name not in name_to_id:
-                    logger.warning(f"Unknown class {class_name}, skipping")
+                     # Should not happen logic above covers it
                     continue
                 
                 cid = name_to_id[class_name]
                 if 'poly' in det and det['poly']:
-                    # OBB/Seg Format: class x1 y1 x2 y2 ... (normalized)
+                    # OBB/Seg Format
                     poly_str = " ".join([f"{p:.6f}" for p in det['poly']])
                     f.write(f"{cid} {poly_str}\n")
                 else:
-                    # Standard Box Format: class xc yc w h (normalized)
+                    # Standard Box Format
                     x1, y1, x2, y2 = det['box']
                     
                     # Normalize to 0-1

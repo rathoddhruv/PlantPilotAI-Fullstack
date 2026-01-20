@@ -95,6 +95,11 @@ def get_logs():
     """Return recent logs from the ML service."""
     return {"logs": ml_service.get_logs()}
 
+@router.get("/classes")
+def get_classes():
+    """Return list of class names from the dataset."""
+    return {"classes": ml_service.get_classes()}
+
 @router.post("/inspect-zip")
 async def inspect_zip(file: UploadFile = File(...)):
     """

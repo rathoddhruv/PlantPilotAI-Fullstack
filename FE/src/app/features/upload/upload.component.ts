@@ -25,6 +25,7 @@ export interface LogEntry {
 export class UploadComponent implements OnInit, OnDestroy {
     isDragOver = false;
     status: 'idle' | 'initializing' | 'training' | 'ready' = 'idle';
+    uploadMode: 'train' | 'test' = 'train'; // New Mode
 
     // UI Props
     statusTitle = '';
@@ -43,7 +44,7 @@ export class UploadComponent implements OnInit, OnDestroy {
     trainEpochs = 40;
     trainImgsz = 960;
     trainModel = 'yolov8n.pt';
-    isFreshStart = false;
+    // isFreshStart = false; // Removed
 
     runs: RunInfo[] = [];
     manifest: any = null;
@@ -122,6 +123,13 @@ export class UploadComponent implements OnInit, OnDestroy {
                 this.currentModelName = 'yolov8s.pt (Fallback)';
             }
         });
+
+        // Fetch System info once to set initial mode/model
+        this.api.getSystemInfo().subscribe(res => {
+            if (res.active_model && !res.active_model.includes('Base') && !res.active_model.includes('None')) {
+                this.uploadMode = 'train'; // Default to train for active projects
+            }
+        });
     }
 
     ngOnDestroy() {
@@ -179,6 +187,7 @@ export class UploadComponent implements OnInit, OnDestroy {
         }
 
         this.addLog(`Queueing ${imageFiles.length} images for review.`);
+        this.reviewQueue.mode = this.uploadMode; // Pass mode
         this.reviewQueue.addFiles(imageFiles);
         this.router.navigate(['/review']);
     }
@@ -186,15 +195,14 @@ export class UploadComponent implements OnInit, OnDestroy {
     // --- Process Flow ---
     startZipFlow(file: File) {
         this.status = 'initializing';
-        this.statusTitle = this.isFreshStart ? 'Resetting & Initializing' : 'Initializing Project';
+        this.statusTitle = 'Initializing Project';
         this.statusMessage = 'Uploading...';
         this.progressPercent = 10;
         this.extractedCount = 0;
 
-        // Sequence: Reset (Optional) -> Init -> Poll Logs
-        const flow$ = this.isFreshStart
-            ? this.api.resetProject().pipe(switchMap(() => this.api.initProject(file, this.trainEpochs, this.trainImgsz, this.trainModel)))
-            : this.api.initProject(file, this.trainEpochs, this.trainImgsz, this.trainModel);
+        // Sequence: Init -> Poll Logs
+        // We rely on Sidebar 'Reset' for fresh starts. Here we just upload/append.
+        const flow$ = this.api.initProject(file, this.trainEpochs, this.trainImgsz, this.trainModel);
 
         flow$.subscribe({
             next: (res) => {
@@ -223,7 +231,7 @@ export class UploadComponent implements OnInit, OnDestroy {
             error: (err: any) => {
                 this.status = 'idle';
                 const msg = err.error?.detail || err.message || "Upload failed";
-                this.error = "Faled: " + msg;
+                this.error = "Failed: " + msg;
                 this.addLog("Error: " + msg);
             }
         });

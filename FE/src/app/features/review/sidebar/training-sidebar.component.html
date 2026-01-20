@@ -23,12 +23,21 @@
                 sysInfo.device_name }}</span>
         </div>
         <div class="flex items-center justify-between text-xs font-mono mt-1">
+            <span class="text-gray-500">Model</span>
+            <span class="text-purple-600 font-bold truncate max-w-[150px]">{{ sysInfo.active_model }}</span>
+        </div>
+        <div class="flex items-center justify-between text-xs font-mono mt-1">
             <span class="text-gray-500">CUDA</span>
             <span [class.text-green-600]="sysInfo.cuda_available" [class.text-gray-400]="!sysInfo.cuda_available"
                 class="font-bold">
                 {{ sysInfo.cuda_available ? 'ENABLED' : 'DISABLED' }}
             </span>
         </div>
+
+        <button (click)="resetProject()"
+            class="w-full mt-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded shadow-sm hover:bg-red-50 hover:text-red-600 transition-colors">
+            Start New Project (Reset)
+        </button>
     </div>
 
     <!-- Overview Section -->
@@ -100,7 +109,7 @@
 
             <ng-template #noModel>
                 <div class="bg-gray-100 rounded-xl p-6 text-center border border-dashed border-gray-300">
-                    <span class="text-2xl mb-2 block">🌱</span>
+                    <span class="text-2xl mb-2 block">📦</span>
                     <p class="text-gray-500 font-medium text-sm">No training runs yet.</p>
                     <p class="text-xs text-gray-400 mt-1">Upload a ZIP to initialize.</p>
                 </div>

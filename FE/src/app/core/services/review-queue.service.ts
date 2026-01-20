@@ -19,6 +19,7 @@ export class ReviewQueueService {
 
     public currentItem$ = new BehaviorSubject<ReviewItem | null>(null);
     public queueStats$ = new BehaviorSubject<{ current: number, total: number }>({ current: 0, total: 0 });
+    public mode: 'train' | 'test' = 'train'; // Default to train mode
 
     constructor() { }
 

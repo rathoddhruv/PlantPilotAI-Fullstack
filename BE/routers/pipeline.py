@@ -14,6 +14,8 @@ ML_DIR = Path(__file__).resolve().parents[2] / "ML"
 
 import torch
 
+from BE.services.ml_service import ml_service
+
 @router.get("/system/info")
 def get_system_info():
     """Return system capabilities (CUDA, etc.)"""
@@ -23,7 +25,8 @@ def get_system_info():
         "status": "online",
         "cuda_available": cuda,
         "device_name": device_name,
-        "torch_version": torch.__version__
+        "torch_version": torch.__version__,
+        "active_model": str(ml_service.model_path) if ml_service.model_path else "Not Loaded"
     }
 
 @router.post("/init")

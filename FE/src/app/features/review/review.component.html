@@ -18,10 +18,37 @@
     <div class="flex-1 overflow-y-auto p-6">
         <div class="max-w-4xl mx-auto space-y-6">
 
+            <!-- Toolbar -->
+            <div class="flex items-center justify-center space-x-4 mb-2">
+                <button (click)="setMode('review')" [class.bg-blue-600]="interactionMode === 'review'"
+                    [class.text-white]="interactionMode === 'review'"
+                    class="px-4 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50 flex items-center space-x-2 transition-colors">
+                    <span>👆 Review</span>
+                </button>
+                <div class="h-8 w-px bg-gray-300"></div>
+                <button (click)="setMode('box')" [class.bg-blue-600]="interactionMode === 'box'"
+                    [class.text-white]="interactionMode === 'box'"
+                    class="px-4 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50 flex items-center space-x-2 transition-colors">
+                    <span>⬜ Draw Box</span>
+                </button>
+                <button (click)="setMode('poly')" [class.bg-blue-600]="interactionMode === 'poly'"
+                    [class.text-white]="interactionMode === 'poly'"
+                    class="px-4 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50 flex items-center space-x-2 transition-colors">
+                    <span>✏️ Draw Poly</span>
+                </button>
+                <div class="text-xs text-gray-500 ml-4 font-mono">
+                    <span *ngIf="interactionMode === 'poly'">Click to add points. Double-click/Enter to close.</span>
+                    <span *ngIf="interactionMode === 'box'">Click and drag to draw.</span>
+                </div>
+            </div>
+
             <!-- Canvas Container -->
-            <div class="relative bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden text-center p-4">
-                <canvas #canvas class="max-w-full h-auto mx-auto rounded-lg shadow-inner bg-gray-100"></canvas>
-                <div *ngIf="!prediction" class="p-10 text-gray-400 italic">No image loaded</div>
+            <div
+                class="relative bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden text-center p-4 select-none">
+                <canvas #canvas (mousedown)="onMouseDown($event)" (mousemove)="onMouseMove($event)"
+                    (mouseup)="onMouseUp($event)" (click)="onCanvasClick($event)" (dblclick)="onCanvasDblClick($event)"
+                    class="max-w-full h-auto mx-auto rounded-lg shadow-inner bg-gray-100 cursor-crosshair"></canvas>
+                <div *ngIf="!prediction && !current" class="p-10 text-gray-400 italic">No image loaded</div>
             </div>
 
             <!-- Correction Panel -->
@@ -58,19 +85,36 @@
                                 class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">{{
                                 i + 1 }}</span>
 
+                            <!-- Poly Icon -->
+                            <!-- Poly Icon -->
+                            <span *ngIf="det.poly"
+                                class="text-[10px] bg-purple-100 text-purple-600 px-1 rounded">POLY</span>
+
                             <div>
                                 <p class="text-[10px] text-gray-400 uppercase font-mono">Confidence: {{ (det.confidence
                                     * 100).toFixed(0) }}%</p>
                             </div>
                         </div>
 
-                        <!-- Class Selector -->
-                        <div class="flex items-center space-x-2" [class.opacity-50]="det['ignore']">
-                            <label class="text-xs font-semibold text-gray-600 mr-2">Class:</label>
-                            <select [(ngModel)]="det.class" (change)="redraw()" [disabled]="!!det['ignore']"
-                                class="block w-40 rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm py-1.5 bg-white">
-                                <option *ngFor="let name of classNames" [value]="name">{{ name }}</option>
-                            </select>
+                        <div class="flex items-center gap-3">
+                            <!-- Class Selector -->
+                            <div class="flex items-center space-x-2" [class.opacity-50]="det['ignore']">
+                                <label class="text-xs font-semibold text-gray-600 mr-2">Class:</label>
+
+                                <input type="text" [(ngModel)]="det.class" (change)="redraw()"
+                                    [disabled]="!!det['ignore']" list="classOptions"
+                                    class="block w-32 rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm py-1.5 bg-white px-2">
+
+                                <datalist id="classOptions">
+                                    <option *ngFor="let name of classNames" [value]="name"></option>
+                                </datalist>
+                            </div>
+
+                            <!-- Delete Button -->
+                            <button (click)="deleteDetection(i)"
+                                class="text-gray-400 hover:text-red-500 transition-colors" title="Delete">
+                                🗑️
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -95,12 +139,13 @@
         class="h-20 bg-white border-t border-gray-200 flex items-center justify-center space-x-6 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex-shrink-0">
         <button (click)="reject()"
             class="group flex flex-col items-center justify-center w-32 h-14 rounded-xl border-2 border-transparent bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-200 active:scale-95 transition-all">
-            <span class="font-bold">Reject</span>
+            <span class="font-bold">{{ mode === 'test' ? 'Skip' : 'Reject' }}</span>
         </button>
 
-        <button (click)="accept()"
-            class="group flex flex-col items-center justify-center w-48 h-14 rounded-xl shadow-lg bg-green-600 text-white hover:bg-green-700 active:scale-95 transition-all">
-            <span class="font-bold text-lg">Accept & Train</span>
+        <button (click)="accept()" [class.bg-blue-600]="mode === 'test'" [class.hover:bg-blue-700]="mode === 'test'"
+            [class.bg-green-600]="mode === 'train'" [class.hover:bg-green-700]="mode === 'train'"
+            class="group flex flex-col items-center justify-center w-48 h-14 rounded-xl shadow-lg text-white active:scale-95 transition-all">
+            <span class="font-bold text-lg">{{ mode === 'test' ? 'Done' : 'Accept & Train' }}</span>
         </button>
     </div>
 

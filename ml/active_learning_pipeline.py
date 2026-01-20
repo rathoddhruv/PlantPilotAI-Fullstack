@@ -65,6 +65,7 @@ if __name__ == '__main__':
     # absolute yaml paths avoid accidental cross-repo references
     YOLO_DATASET_YAML_ABS = str((THIS_DIR / "yolo_dataset.yaml").resolve())
     YOLO_MERGED_YAML_ABS = str((THIS_DIR / "yolo_merged.yaml").resolve())
+    RUNS_DETECT_ABS = THIS_DIR / "runs" / "detect"
 
     def update_yaml_path(yaml_path, rel_data_path):
         """Force absolute path in YAML to avoid Ultralytics settings interference"""
@@ -168,7 +169,7 @@ if __name__ == '__main__':
                 data=str(dataset_yaml),
                 imgsz=args.imgsz,  # Use CLI argument
                 device=device,
-                project="runs/detect",
+                project=str(RUNS_DETECT_ABS), # Absolute path
                 name="train",
                 exist_ok=True,
                 resume=False,
@@ -183,7 +184,7 @@ if __name__ == '__main__':
             sys.exit(1)
     
         # verify artifacts exist before renaming the dataset
-        best = Path("runs") / "detect" / "train" / "weights" / "best.pt"
+        best = RUNS_DETECT_ABS / "train" / "weights" / "best.pt"
         if not best.exists():
             print("No training artifacts found at", best)
             sys.exit(1)
@@ -191,7 +192,7 @@ if __name__ == '__main__':
         # record manifest for the one-time initial training
         _manifest_append(
             "initial_train",
-            {"save_dir": str((Path("runs") / "detect" / "train").resolve())},
+            {"save_dir": str((RUNS_DETECT_ABS / "train").resolve())},
         )
     
         # rename dataset so it is not reused accidentally
@@ -323,7 +324,7 @@ if __name__ == '__main__':
         
         print(f"Found {len(train_images)} images and {len(train_labels)} labels.")
         # force stable save path under ml/runs/detect/train
-        TRAIN_STABLE = Path("runs") / "detect" / "train"
+        TRAIN_STABLE = RUNS_DETECT_ABS / "train"
         if TRAIN_STABLE.exists():
             shutil.rmtree(TRAIN_STABLE, ignore_errors=True)
     
@@ -336,7 +337,7 @@ if __name__ == '__main__':
             f"data={dataset_yaml}",
             f"imgsz={args.imgsz}",
             "device=0",
-            "project=runs/detect",  # stable root
+            f"project={RUNS_DETECT_ABS}",  # stable root absolute
             "name=train",  # always 'train'
             "exist_ok=True",
             "resume=False",
@@ -358,7 +359,7 @@ if __name__ == '__main__':
             sys.exit(1)
     
         # after training, backup old model and update MODEL_PATH with new best
-        final_best = Path("runs/detect/train/weights/best.pt")
+        final_best = RUNS_DETECT_ABS / "train" / "weights" / "best.pt"
         target_model = CONFIG_MODEL_PATH
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_model = Path(f"temp/last_model_{timestamp}.pt")
@@ -376,12 +377,12 @@ if __name__ == '__main__':
         else:
             print("Training finished, but no best.pt found at expected location.")
             print("Cleaning up broken run folder...")
-            shutil.rmtree("runs/detect/train", ignore_errors=True)
+            shutil.rmtree(RUNS_DETECT_ABS / "train", ignore_errors=True)
     
         _manifest_append(
             "active_learning_train",
             {
-                "save_dir": str((Path("runs") / "detect" / "train").resolve()),
+                "save_dir": str((RUNS_DETECT_ABS / "train").resolve()),
                 "images": len(train_images),
                 "labels": len(train_labels),
             },

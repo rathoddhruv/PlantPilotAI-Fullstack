@@ -5,12 +5,11 @@ import { Observable } from 'rxjs';
 // Environment variable or hardcoded for dev
 const API_URL = 'http://localhost:8000/api/v1';
 
-export const CLASS_NAMES = ['Hydrangea', 'Dandelion'];
-
 export interface Detection {
     class: string;
     confidence: number;
     box: [number, number, number, number]; // x1, y1, x2, y2
+    poly?: number[]; // Normalized polygon points [x, y, x, y, ...]
     ignore?: boolean;
 }
 
@@ -97,5 +96,9 @@ export class ApiService {
 
     resetProject(): Observable<any> {
         return this.http.post(`${API_URL}/project/reset`, {});
+    }
+
+    getClasses(): Observable<{ classes: string[] }> {
+        return this.http.get<{ classes: string[] }>(`${API_URL}/project/classes`);
     }
 }
