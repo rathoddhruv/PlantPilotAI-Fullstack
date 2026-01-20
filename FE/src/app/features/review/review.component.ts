@@ -309,7 +309,7 @@ export class ReviewComponent implements OnInit {
         // Draw In-Progress Stuff
         if (this.interactionMode === 'box' && this.currentBox) {
             ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 4;
             ctx.setLineDash([5, 5]);
             ctx.strokeRect(this.currentBox.x, this.currentBox.y, this.currentBox.w, this.currentBox.h);
             ctx.setLineDash([]);
@@ -317,7 +317,7 @@ export class ReviewComponent implements OnInit {
 
         if (this.interactionMode === 'poly' && this.currentPoly.length > 0) {
             ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 4;
             ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
 
             ctx.beginPath();

@@ -3,6 +3,7 @@ import subprocess
 import shutil
 from pathlib import Path
 from ultralytics import YOLO
+import yaml
 from BE.settings import ML_DIR, IMPORT_ZIP_SCRIPT, ML_PIPELINE
 
 import logging
@@ -137,6 +138,7 @@ class MLService:
     def predict(self, image_path: Path, conf=0.25):
         """Run inference on a single image."""
         logger.info(f"Predict request for {image_path}")
+        detections = []  # <--- FIXED: Initialize list
         if not self.model:
             logger.warning("Model is None, will attempt reload")
             self.load_model()
@@ -184,8 +186,6 @@ class MLService:
                 })
             
         return detections
-
-    import yaml
 
     def get_classes(self):
         """Read classes from yolo_dataset.yaml."""

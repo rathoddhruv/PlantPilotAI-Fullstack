@@ -36,9 +36,10 @@
                     </h1>
                     <div
                         class="mt-2 inline-flex items-center px-4 py-1.5 rounded-full bg-gray-100 border border-gray-200 text-xs font-mono text-gray-500">
-                        <span class="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
-                        Current Model: <span class="font-bold text-gray-700 ml-1">{{ currentModelName }}</span>
+                        <span class="mr-2">⚡ Active Model:</span>
+                        <span class="font-bold text-purple-600">{{ trainModel }}</span>
                     </div>
+
 
                     <!-- Stats Panel -->
                     <div class="mt-4" *ngIf="runs && runs.length > 0">
@@ -93,12 +94,12 @@
                             <label
                                 class="flex items-center gap-2 cursor-pointer hover:text-green-600 transition-colors">
                                 <span class="font-bold text-xs">EPOCHS</span>
-                                <input [(ngModel)]="trainEpochs" type="number"
+                                <input [(ngModel)]="trainEpochs" type="number" min="1" max="300" step="10"
                                     class="border border-gray-200 p-1 rounded w-16 text-center font-bold text-gray-700 bg-gray-50 focus:ring-2 focus:ring-green-400 outline-none transition-all">
                             </label>
                             <label class="flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors">
                                 <span class="font-bold text-xs">IMGSZ</span>
-                                <input [(ngModel)]="trainImgsz" type="number"
+                                <input [(ngModel)]="trainImgsz" type="number" step="32" min="320" max="1280"
                                     class="border border-gray-200 p-1 rounded w-16 text-center font-bold text-gray-700 bg-gray-50 focus:ring-2 focus:ring-blue-400 outline-none transition-all">
                             </label>
 
@@ -111,17 +112,6 @@
                                     <option value="yolov8s.pt">YOLOv8s</option>
                                     <option value="yolov8l.pt">YOLOv8l</option>
                                     <option value="yolov11n.pt">YOLOv11n</option>
-
-                                    <optgroup label="OBB">
-                                        <option value="yolov8n-obb.pt">YOLOv8n-OBB</option>
-                                        <option value="yolov8s-obb.pt">YOLOv8s-OBB</option>
-                                        <option value="yolov11n-obb.pt">YOLOv11n-OBB</option>
-                                    </optgroup>
-
-                                    <optgroup label="Segmentation">
-                                        <option value="yolov8n-seg.pt">YOLOv8n-Seg</option>
-                                        <option value="yolov8s-seg.pt">YOLOv8s-Seg</option>
-                                    </optgroup>
                                 </select>
                             </label>
                         </div>

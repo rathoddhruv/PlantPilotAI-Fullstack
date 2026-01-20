@@ -20,20 +20,23 @@
 
             <!-- Toolbar -->
             <div class="flex items-center justify-center space-x-4 mb-2">
-                <button (click)="setMode('review')" [class.bg-blue-600]="interactionMode === 'review'"
-                    [class.text-white]="interactionMode === 'review'"
-                    class="px-4 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50 flex items-center space-x-2 transition-colors">
+                <button (click)="setMode('review')" [class.bg-blue-100]="interactionMode === 'review'"
+                    [class.text-blue-900]="interactionMode === 'review'"
+                    [class.border-blue-500]="interactionMode === 'review'"
+                    class="px-4 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50 flex items-center space-x-2 transition-colors font-medium">
                     <span>👆 Review</span>
                 </button>
                 <div class="h-8 w-px bg-gray-300"></div>
-                <button (click)="setMode('box')" [class.bg-blue-600]="interactionMode === 'box'"
-                    [class.text-white]="interactionMode === 'box'"
-                    class="px-4 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50 flex items-center space-x-2 transition-colors">
+                <button (click)="setMode('box')" [class.bg-blue-100]="interactionMode === 'box'"
+                    [class.text-blue-900]="interactionMode === 'box'"
+                    [class.border-blue-500]="interactionMode === 'box'"
+                    class="px-4 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50 flex items-center space-x-2 transition-colors font-medium">
                     <span>⬜ Draw Box</span>
                 </button>
-                <button (click)="setMode('poly')" [class.bg-blue-600]="interactionMode === 'poly'"
-                    [class.text-white]="interactionMode === 'poly'"
-                    class="px-4 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50 flex items-center space-x-2 transition-colors">
+                <button (click)="setMode('poly')" [class.bg-blue-100]="interactionMode === 'poly'"
+                    [class.text-blue-900]="interactionMode === 'poly'"
+                    [class.border-blue-500]="interactionMode === 'poly'"
+                    class="px-4 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50 flex items-center space-x-2 transition-colors font-medium">
                     <span>✏️ Draw Poly</span>
                 </button>
                 <div class="text-xs text-gray-500 ml-4 font-mono">

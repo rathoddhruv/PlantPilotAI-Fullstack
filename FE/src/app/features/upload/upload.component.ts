@@ -41,8 +41,8 @@ export class UploadComponent implements OnInit, OnDestroy {
     datasetClasses = '-';
 
     // Training Settings
-    trainEpochs = 40;
-    trainImgsz = 960;
+    trainEpochs = 50;
+    trainImgsz = 640;
     trainModel = 'yolov8n.pt';
     // isFreshStart = false; // Removed
 
@@ -187,6 +187,7 @@ export class UploadComponent implements OnInit, OnDestroy {
         }
 
         this.addLog(`Queueing ${imageFiles.length} images for review.`);
+        this.reviewQueue.clear(); // Clear any previous state
         this.reviewQueue.mode = this.uploadMode; // Pass mode
         this.reviewQueue.addFiles(imageFiles);
         this.router.navigate(['/review']);
