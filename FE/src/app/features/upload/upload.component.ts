@@ -46,6 +46,17 @@ export class UploadComponent implements OnInit, OnDestroy {
     trainModel = 'yolov8n.pt';
     // isFreshStart = false; // Removed
 
+    trainDefaultClass = '';
+
+    updateQueueConfig() {
+        this.reviewQueue.trainingConfig = {
+            epochs: this.trainEpochs,
+            imgsz: this.trainImgsz,
+            model: this.trainModel
+        };
+        this.reviewQueue.defaultClass = this.trainDefaultClass;
+    }
+
     runs: RunInfo[] = [];
     manifest: any = null;
 
@@ -55,9 +66,14 @@ export class UploadComponent implements OnInit, OnDestroy {
 
     // Layout State
     sidebarWidth = 320;
-    consoleHeight = 256;
+    consoleHeight = 200; // Expanded height
+    isConsoleOpen = false; // Default closed
     isResizingSidebar = false;
     isResizingConsole = false;
+
+    toggleConsole() {
+        this.isConsoleOpen = !this.isConsoleOpen;
+    }
 
     constructor(
         private api: ApiService,
@@ -238,6 +254,32 @@ export class UploadComponent implements OnInit, OnDestroy {
         });
     }
 
+    resetProject() {
+        if (!confirm('Are you sure you want to delete all datasets, models, and history? This cannot be undone.')) return;
+
+        this.addLog("Resetting project...");
+        this.status = 'initializing';
+
+        this.api.resetProject().subscribe({
+            next: () => {
+                this.reviewQueue.clear();
+                this.runs = [];
+                this.devLogs = [];
+                this.status = 'idle';
+                this.statusTitle = '';
+                this.statusMessage = '';
+                this.progressPercent = 0;
+                this.currentModelName = 'Reset';
+                this.error = '';
+                this.addLog("Project reset complete.");
+            },
+            error: (err) => {
+                this.error = "Reset failed: " + err.message;
+                this.status = 'idle';
+            }
+        });
+    }
+
     startPredictionFlow(file: File) {
         this.addLog("Starting prediction for " + file.name);
         this.status = 'initializing';
@@ -264,24 +306,35 @@ export class UploadComponent implements OnInit, OnDestroy {
     // --- Logging ---
     startLogPolling() {
         this.stopLogPolling();
-        this.logSub = interval(1000).pipe(
-            switchMap(() => this.api.getLogs())
-        ).subscribe({
-            next: (res) => {
-                if (res.logs && res.logs.length > 0) {
-                    this.devLogs = this.processBackendLogs(res.logs);
 
-                    // Check if finished
-                    if (res.logs[res.logs.length - 1].includes("Reloading model")) {
-                        this.status = 'ready';
-                        this.statusTitle = 'Training Complete';
-                        this.statusMessage = 'Model updated.';
-                        this.stopLogPolling();
-                        this.progressPercent = 100;
-                        setTimeout(() => this.status = 'idle', 3000);
-                    }
+        // Poll status every 2 seconds
+        this.logSub = interval(2000).pipe(
+            switchMap(() => this.api.getStatus())
+        ).subscribe({
+            next: (status) => {
+                // Update Training State based on backend flag
+                if (this.status === 'training' && !status.is_training) {
+                    // Training finished
+                    this.status = 'ready';
+                    this.statusTitle = 'Training Complete';
+                    this.statusMessage = 'Model updated.';
+                    this.progressPercent = 100;
+                    this.stopLogPolling(); // Stop polling status
+                    setTimeout(() => this.status = 'idle', 3000);
                 }
-            }
+                else if (this.status === 'initializing' && status.is_training) {
+                    // Transition to training if backend caught up
+                    this.status = 'training';
+                }
+
+                // Conditional Log Fetching: Only if Console is Open
+                if (this.isConsoleOpen && status.logs_available) {
+                    this.api.getLogs().subscribe(res => {
+                        this.devLogs = this.processBackendLogs(res.logs);
+                    });
+                }
+            },
+            error: (err) => console.error("Status check failed", err)
         });
     }
 

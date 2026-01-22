@@ -26,7 +26,7 @@ export class ReviewComponent implements OnInit {
     classNames: string[] = [];
 
     // Interaction State
-    interactionMode: 'review' | 'box' | 'poly' = 'review';
+    interactionMode: 'review' | 'box' | 'poly' = 'box';
     isDrawing = false;
     dragStart: { x: number, y: number } | null = null;
     currentBox: { x: number, y: number, w: number, h: number } | null = null;
@@ -89,8 +89,12 @@ export class ReviewComponent implements OnInit {
         if (!this.isDrawing && this.interactionMode !== 'poly') return;
 
         const rect = this.canvasRef.nativeElement.getBoundingClientRect();
-        const x = (e.clientX - rect.left) * (this.image.width / rect.width);
-        const y = (e.clientY - rect.top) * (this.image.height / rect.height);
+        let x = (e.clientX - rect.left) * (this.image.width / rect.width);
+        let y = (e.clientY - rect.top) * (this.image.height / rect.height);
+
+        // Clamp to image bounds to avoid corrupt labels
+        x = Math.max(0, Math.min(x, this.image.width));
+        y = Math.max(0, Math.min(y, this.image.height));
 
         if (this.interactionMode === 'box' && this.dragStart) {
             this.currentBox = {
@@ -115,8 +119,9 @@ export class ReviewComponent implements OnInit {
         this.isDrawing = false;
         if (this.currentBox && this.currentBox.w > 5 && this.currentBox.h > 5) {
             // Add Detection
+            const defClass = this.reviewQueue.defaultClass;
             this.addDetection({
-                class: this.classNames[0] || 'Object',
+                class: defClass && defClass.length > 0 ? defClass : (this.classNames[0] || 'Object'),
                 confidence: 1.0,
                 box: [
                     this.currentBox.x,
@@ -448,25 +453,32 @@ export class ReviewComponent implements OnInit {
         // Filter out ignored detections
         const validDetections = this.prediction.detections.filter((d: any) => !d.ignore);
 
-        this.showToast('Saving & Training...');
+        this.showToast('Saving...');
         this.reviewQueue.updateCurrentItem({ status: 'accepted' });
 
+        // Save Annotation
         this.api.saveAnnotation(
-            this.prediction.filename,
+            this.prediction.filename, // Using filename with UUID from prediction (backend compatible)
             validDetections,
             this.image.width,
             this.image.height
-        ).pipe(
-            switchMap(() => this.api.triggerTraining())
         ).subscribe({
             next: () => {
-                this.showToast('Saved & Training Triggered!');
-                setTimeout(() => this.handleNext(), 1000);
+                this.showToast('Saved! Training queued in background.');
+
+                // Fire and forget training (don't block UI)
+                const config = this.reviewQueue.trainingConfig;
+                this.api.triggerTraining(config).subscribe({
+                    error: (err) => console.warn('Background training trigger failed', err)
+                });
+
+                // Move to next immediately
+                this.handleNext();
             },
             error: (err) => {
                 console.error("Save failed", err);
                 this.showToast('Error saving annotation');
-                setTimeout(() => this.handleNext(), 2000);
+                // Still move next? No, let user retry.
             }
         });
     }

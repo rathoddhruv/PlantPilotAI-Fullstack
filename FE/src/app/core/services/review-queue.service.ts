@@ -20,6 +20,8 @@ export class ReviewQueueService {
     public currentItem$ = new BehaviorSubject<ReviewItem | null>(null);
     public queueStats$ = new BehaviorSubject<{ current: number, total: number }>({ current: 0, total: 0 });
     public mode: 'train' | 'test' = 'train'; // Default to train mode
+    public trainingConfig = { epochs: 50, imgsz: 640, model: 'yolov8n.pt' };
+    public defaultClass = '';
 
     constructor() { }
 

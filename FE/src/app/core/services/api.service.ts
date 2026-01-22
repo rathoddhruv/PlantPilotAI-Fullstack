@@ -67,9 +67,9 @@ export class ApiService {
         return this.http.post<PredictionResult>(`${API_URL}/inference/predict`, formData);
     }
 
-    triggerTraining(): Observable<any> {
+    triggerTraining(config?: { epochs: number, imgsz: number, model: string }): Observable<any> {
         // Calling project/train which triggers background task
-        return this.http.post(`${API_URL}/project/train`, {});
+        return this.http.post(`${API_URL}/project/train`, config || {});
     }
 
     saveAnnotation(filename: string, detections: any[], width: number, height: number): Observable<any> {
@@ -92,6 +92,10 @@ export class ApiService {
 
     getLogs(): Observable<{ logs: string[] }> {
         return this.http.get<{ logs: string[] }>(`${API_URL}/project/logs`);
+    }
+
+    getStatus(): Observable<{ is_training: boolean; logs_available: boolean }> {
+        return this.http.get<{ is_training: boolean; logs_available: boolean }>(`${API_URL}/project/status`);
     }
 
     resetProject(): Observable<any> {

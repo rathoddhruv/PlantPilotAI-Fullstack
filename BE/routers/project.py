@@ -11,6 +11,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 router = APIRouter()
 from BE.services.ml_service import ml_service
+from pydantic import BaseModel
 
 @router.post("/init")
 def initialize_project(
@@ -52,13 +53,29 @@ def initialize_project(
     
     return {"status": "success", "message": "Project initialized. Processing and training started in background."}
 
+class TrainingRequest(BaseModel):
+    epochs: int = 50
+    imgsz: int = 640
+    model: str = "yolov8n.pt"
+
 @router.post("/train")
-async def trigger_training(background_tasks: BackgroundTasks):
+async def trigger_training(
+    background_tasks: BackgroundTasks,
+    request: TrainingRequest = None
+):
     """
     Manually trigger the active learning pipeline (retraining).
     """
-    background_tasks.add_task(ml_service.run_training)
-    return {"status": "success", "message": "Training started in background."}
+    if request is None:
+        request = TrainingRequest()
+        
+    background_tasks.add_task(
+        ml_service.run_training,
+        epochs=request.epochs,
+        imgsz=request.imgsz,
+        model=request.model
+    )
+    return {"status": "success", "message": f"Training started (Epochs={request.epochs})."}
 
 class AnnotationRequest(json.BaseModel if 'BaseModel' in locals().get('pydantic', {}).__dir__() else object):
     pass 
@@ -89,6 +106,14 @@ def save_annotation(payload: AnnotationPayload):
     except Exception as e:
         logger.exception("Annotation save failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/status")
+def get_status():
+    """Get training status."""
+    return {
+        "is_training": ml_service.is_training,
+        "logs_available": len(ml_service.logs) > 0
+    }
 
 @router.get("/logs")
 def get_logs():

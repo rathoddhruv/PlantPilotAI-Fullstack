@@ -30,23 +30,41 @@ class MLService:
         """Reset project data to fresh state."""
         self.log_message("Resetting project data...")
         
+        # Unload model to release file locks
+        self.model = None
+        import gc
+        gc.collect() 
+        
         # Paths to clean
         targets = [
             ML_DIR / "datasets",
             ML_DIR / "runs",
-            ML_DIR / "uploads" # If we had one here
+            ML_DIR / "data" / "yolo_merged", # Also clean merged data
+            ML_DIR / "yolo_dataset.yaml" # And the dataset definition
         ]
         
         for p in targets:
             if p.exists():
                 self.log_message(f"Deleting {p}")
-                shutil.rmtree(p, ignore_errors=True)
+                try:
+                    if p.is_dir():
+                        shutil.rmtree(p) # Strict deletion
+                    else:
+                        p.unlink()
+                except Exception as e:
+                    self.log_message(f"Failed to delete {p}: {e}")
+                    # Try renaming as fallback (sometimes works on Windows)
+                    try:
+                        p.rename(p.parent / f"{p.name}_trash_{id(self)}")
+                    except:
+                        pass
         
         # Re-create empty
         (ML_DIR / "datasets").mkdir(exist_ok=True)
-        self.model = None # Reset model in memory
-        self.load_model() # Will load base model
         self.log_message("Project reset complete. Ready for fresh upload.")
+        
+        # Reload base model
+        self.load_model()
 
     def load_model(self):
         runs_dir = ML_DIR / "runs" / "detect"

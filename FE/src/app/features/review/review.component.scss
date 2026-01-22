@@ -29,3 +29,9 @@
         transform: translate(-50%, 0);
     }
 }
+
+canvas {
+    max-height: 500px;
+    width: auto;
+    object-fit: contain;
+}
