@@ -33,7 +33,7 @@ This will open two separate windows for backend and frontend.
 
 1. **Install Python Dependencies**
 ```bash
-pip install "numpy<2" opencv-python pillow ultralytics pyyaml fastapi uvicorn
+pip install "numpy<2" opencv-python pillow ultralytics pyyaml fastapi uvicorn python-multipart
 ```
 
 2. **Install Node Dependencies**
@@ -65,6 +65,7 @@ Once both services are running:
 - Ensure Python 3.11 is installed
 - Check that port 8000 is not in use
 - Verify dependencies: `pip list | findstr ultralytics`
+- **Error: 'python' is not recognized**: Ensure Python is added to your system PATH environment variable. You may need to restart your terminal or computer after installing Python.
 
 ### CUDA Not Detected
 - Verify PyTorch with CUDA: `python -c "import torch; print(torch.cuda.is_available())"`

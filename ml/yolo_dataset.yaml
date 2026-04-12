@@ -1,4 +1,4 @@
-path: data\yolo_merged
+path: C:\000 Proj\PlantPilotAI-Fullstack\ml\data\yolo_dataset
 train: images/train
 val: images/train
 names:

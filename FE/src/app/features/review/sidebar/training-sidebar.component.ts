@@ -4,6 +4,13 @@ import { ApiService, RunInfo, CLASS_NAMES } from '../../../core/services/api.ser
 import { interval, Subscription, switchMap, startWith } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
 
+export interface LogEntry {
+    msg: string;
+    count: number;
+    time: string;
+    type: 'info' | 'error' | 'success' | 'warn';
+}
+
 @Component({
     selector: 'app-training-sidebar',
     standalone: true,
@@ -15,48 +22,38 @@ export class TrainingSidebarComponent implements OnInit, OnDestroy {
     runs: RunInfo[] = [];
     latestRun: RunInfo | null = null;
     pollSub: Subscription | null = null;
+    logSub: Subscription | null = null;
     classNames = CLASS_NAMES;
+
+    devLogs: LogEntry[] = [];
+
+    sysInfo: any = null;
 
     constructor(private api: ApiService, private toast: ToastService) { }
 
     ngOnInit() {
-        // Poll every 5 seconds
+        // Fetch System Info
+        this.api.getSystemInfo().subscribe(res => {
+            this.sysInfo = res;
+        });
+
+        // Poll runs every 5 seconds
         this.pollSub = interval(5000).pipe(
             startWith(0),
             switchMap(() => this.api.getRuns())
         ).subscribe({
             next: (res) => {
                 if (res.status === 'success') {
-                    // Check if we already have runs loaded.
                     if (this.runs.length > 0) {
                         const newLatest = res.runs.find(r => r.kind === 'current') || res.runs[0] || null;
                         const oldLatest = this.latestRun;
-
-                        // Case 1: New run appeared (count increased)
                         if (res.runs.length > this.runs.length) {
                             this.toast.show('New Training Run Started', 'info');
                         }
-
-                        // Case 2: Current run updated (mtime changed significantly)
-                        // Note: During training mtime updates frequently. We ideally want to know when it *finishes*.
-                        // But polling 'runs' endpoint doesn't give "status: finished".
-                        // However, if we track "training" state, we could infer.
-                        // For now, simpler approach: if mtime changed by more than 1 min from previous check? No.
-                        // Let's just update the list. The user asked for "Completion Notification".
-                        // Use a simple heuristic: If we previously had a run, and its mtime changed, and we were not "training" locally?
-                        // Actually, if using shared service, we could know.
-
-                        // Let's try to detect if 'current' run changed.
-                        if (newLatest && oldLatest) {
-                            if (newLatest.name !== oldLatest.name) {
-                                this.toast.show(`Model switched to ${newLatest.name}`, 'success');
-                            } else if (newLatest.mtime > oldLatest.mtime) {
-                                // existing model updated
-                                // this.toast.show('Model Updated', 'info'); // This might be too spammy during training
-                            }
+                        if (newLatest && oldLatest && newLatest.name !== oldLatest.name) {
+                            this.toast.show(`Model switched to ${newLatest.name}`, 'success');
                         }
                     }
-
                     this.runs = res.runs;
                     this.latestRun = this.runs.find(r => r.kind === 'current') || this.runs[0] || null;
                 }
