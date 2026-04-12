@@ -62,6 +62,27 @@
                     </div>
                 </div>
 
+                <!-- Mode Toggle Switch -->
+                <div
+                    class="flex items-center justify-center p-1.5 mb-8 bg-gray-100/80 backdrop-blur rounded-2xl border border-gray-200 shadow-inner max-w-sm mx-auto">
+                    <button (click)="setMode('train')"
+                        class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2"
+                        [class.bg-white]="appMode === 'train'" [class.shadow-lg]="appMode === 'train'"
+                        [class.text-green-600]="appMode === 'train'" [class.text-gray-400]="appMode !== 'train'">
+                        <span class="w-2 h-2 rounded-full" [class.bg-green-500]="appMode === 'train'"
+                            [class.bg-gray-300]="appMode !== 'train'"></span>
+                        ACTIVE TRAINING
+                    </button>
+                    <button (click)="setMode('test')"
+                        class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2"
+                        [class.bg-white]="appMode === 'test'" [class.shadow-lg]="appMode === 'test'"
+                        [class.text-blue-600]="appMode === 'test'" [class.text-gray-400]="appMode !== 'test'">
+                        <span class="w-2 h-2 rounded-full" [class.bg-blue-500]="appMode === 'test'"
+                            [class.bg-gray-300]="appMode !== 'test'"></span>
+                        TEST MODEL
+                    </button>
+                </div>
+
                 <!-- Stepper Container -->
                 <div *ngIf="status !== 'idle'"
                     class="mb-6 bg-gray-50 rounded-2xl p-6 border border-gray-100 animate-fade-in">
@@ -88,38 +109,38 @@
                 <!-- Interaction Area -->
                 <div *ngIf="status === 'idle'" class="space-y-6 animate-fade-in-up">
 
-                    <!-- Config Box -->
-                    <div
-                        class="flex flex-col gap-3 justify-center items-center text-sm text-gray-500 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <!-- Config Box (Visible only in Train mode) -->
+                    <div *ngIf="appMode === 'train'"
+                        class="flex flex-col gap-3 justify-center items-center text-sm text-gray-500 bg-white p-4 rounded-xl border border-gray-200 shadow-sm animate-fade-in-up">
                         <div class="flex items-center gap-6 w-full justify-center border-b border-gray-100 pb-3">
                             <span class="text-xs uppercase font-bold text-gray-400 tracking-wider">Training
                                 Config</span>
                             <label
                                 class="flex items-center gap-2 cursor-pointer hover:text-green-600 transition-colors">
                                 <span class="font-bold text-xs">EPOCHS</span>
-                                <input [(ngModel)]="trainEpochs" type="number"
+                                <input [(ngModel)]="trainEpochs" (change)="saveParams()" type="number"
                                     class="border border-gray-200 p-1 rounded w-16 text-center font-bold text-gray-700 bg-gray-50 focus:ring-2 focus:ring-green-400 outline-none transition-all">
                             </label>
                             <label class="flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors">
                                 <span class="font-bold text-xs">IMGSZ</span>
-                                <input [(ngModel)]="trainImgsz" type="number"
+                                <input [(ngModel)]="trainImgsz" (change)="saveParams()" type="number"
                                     class="border border-gray-200 p-1 rounded w-16 text-center font-bold text-gray-700 bg-gray-50 focus:ring-2 focus:ring-blue-400 outline-none transition-all">
                             </label>
 
                             <label
                                 class="flex items-center gap-2 cursor-pointer hover:text-purple-600 transition-colors">
                                 <span class="font-bold text-xs">MODEL</span>
-                                <select [(ngModel)]="trainModel"
+                                <select [(ngModel)]="trainModel" (change)="saveParams()"
                                     class="border border-gray-200 p-1 rounded w-24 font-bold text-gray-700 bg-gray-50 focus:ring-2 focus:ring-purple-400 outline-none transition-all text-xs">
                                     <option value="yolov8n.pt">YOLOv8n</option>
                                     <option value="yolov8s.pt">YOLOv8s</option>
                                     <option value="yolov8l.pt">YOLOv8l</option>
-                                    <option value="yolov11n.pt">YOLOv11n</option>
+                                    <option value="yolo11n.pt">YOLO11n</option>
 
                                     <optgroup label="OBB">
                                         <option value="yolov8n-obb.pt">YOLOv8n-OBB</option>
                                         <option value="yolov8s-obb.pt">YOLOv8s-OBB</option>
-                                        <option value="yolov11n-obb.pt">YOLOv11n-OBB</option>
+                                        <option value="yolo11n-obb.pt">YOLO11n-OBB</option>
                                     </optgroup>
 
                                     <optgroup label="Segmentation">
@@ -128,6 +149,15 @@
                                     </optgroup>
                                 </select>
                             </label>
+                        </div>
+
+                        <div class="flex items-center gap-4 w-full px-4 border-b border-gray-100 pb-3">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase">Detection Threshold</span>
+                            <input type="range" min="0.01" max="0.95" step="0.01" [(ngModel)]="testConfidence"
+                                (change)="saveParams()"
+                                class="flex-1 accent-green-500 h-1.5 bg-gray-200 rounded-lg cursor-pointer">
+                            <span class="w-10 text-center font-mono font-bold text-green-600">{{ (testConfidence *
+                                100).toFixed(0) }}%</span>
                         </div>
 
                         <!-- Fresh Start Toggle -->
@@ -148,21 +178,57 @@
                         </div>
                     </div>
 
+                    <!-- Config Box (Visible only in Test mode) -->
+                    <div *ngIf="appMode === 'test'"
+                        class="flex flex-col gap-4 justify-center items-center text-sm text-gray-500 bg-white p-6 rounded-xl border border-gray-200 shadow-sm animate-fade-in-up">
+                        <div class="flex items-center gap-4 w-full justify-center">
+                            <span class="text-xs uppercase font-bold text-gray-400 tracking-wider">Testing Config</span>
+                            <div
+                                class="flex-1 flex items-center gap-4 px-4 bg-gray-50 py-3 rounded-xl border border-gray-100">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase">Detection Sensitivity</span>
+                                <input type="range" min="0.01" max="0.95" step="0.01" [(ngModel)]="testConfidence"
+                                    (change)="saveParams()"
+                                    class="flex-1 accent-blue-500 h-1.5 bg-gray-200 rounded-lg cursor-pointer">
+                                <span class="w-10 text-center font-mono font-bold text-blue-600">{{ (testConfidence *
+                                    100).toFixed(0) }}%</span>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-gray-400 italic">Adjust this slider to control how "strict" the model
+                            is when finding objects.</p>
+                    </div>
+
                     <!-- Drop Zone -->
-                    <div class="p-8 border-2 border-dashed border-gray-300 rounded-3xl bg-gray-50/50 hover:bg-white hover:border-green-400 transition-all group cursor-pointer"
+                    <div class="p-8 border-2 border-dashed rounded-3xl bg-gray-50/50 hover:bg-white transition-all group cursor-pointer"
+                        [class.border-green-300]="appMode === 'train'"
+                        [class.hover:border-green-500]="appMode === 'train'"
+                        [class.border-blue-300]="appMode === 'test'" [class.hover:border-blue-500]="appMode === 'test'"
                         (click)="fileInput.click()">
                         <div class="mb-3 transform group-hover:scale-110 transition-transform duration-300">
-                            <svg class="w-12 h-12 mx-auto text-gray-400 group-hover:text-green-500 transition-colors"
-                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <!-- Green Upload Icon for Train -->
+                            <svg *ngIf="appMode === 'train'" class="w-12 h-12 mx-auto text-green-400" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                     d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
                                 </path>
                             </svg>
+                            <!-- Blue Detection Icon for Test -->
+                            <svg *ngIf="appMode === 'test'" class="w-12 h-12 mx-auto text-blue-400" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                    d="M10 21h4m-2-3v3m-8-2h12a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2zM8 10V7m4 3V7m4 3V7">
+                                </path>
+                            </svg>
                         </div>
-                        <p class="text-lg text-gray-600 font-medium group-hover:text-gray-800">
-                            Drop <span class="text-green-600 font-bold">Dataset ZIP</span>
+                        <p class="text-lg text-gray-700 font-medium">
+                            <span *ngIf="appMode === 'train'">Drop <span class="text-green-600 font-bold">ZIP /
+                                    Images</span> to Train</span>
+                            <span *ngIf="appMode === 'test'">Drop <span class="text-blue-600 font-bold">Images</span> to
+                                Verify Model</span>
                         </p>
-                        <p class="text-xs text-gray-400 mt-1">Supports Label Studio Export</p>
+                        <p class="text-[10px] text-gray-400 mt-2 uppercase tracking-widest font-bold">
+                            {{ appMode === 'train' ? 'Adds to training queue for labeling' : 'Runs live inference to
+                            show results' }}
+                        </p>
                     </div>
                     <input type="file" multiple #fileInput (change)="onFileSelected($event)" class="hidden" />
                 </div>

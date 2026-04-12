@@ -24,15 +24,19 @@ export class ReviewComponent implements OnInit {
     image: HTMLImageElement = new Image();
     toastMessage: string | null = null;
     classNames = CLASS_NAMES;
+    isTestMode = false;
+    passedConf = 0.25;
 
     constructor(
         private router: Router,
         private api: ApiService,
         private reviewQueue: ReviewQueueService
     ) {
-        // Keep potential state-based logic for direct linking if we want, but prioritize queue
-        // const nav = this.router.getCurrentNavigation();
-        // if (nav?.extras.state && nav.extras.state['prediction']) { ... }
+        const nav = this.router.getCurrentNavigation();
+        if (nav?.extras.state) {
+            if (nav.extras.state['testMode']) this.isTestMode = true;
+            if (nav.extras.state['conf']) this.passedConf = nav.extras.state['conf'];
+        }
     }
 
     ngOnInit() {
@@ -75,11 +79,12 @@ export class ReviewComponent implements OnInit {
 
     runPrediction(item: ReviewItem) {
         this.isLoading = true;
+        this.prediction = null; // Clear stale data
 
         // Optimistic update: analyzing
-        this.reviewQueue.updateCurrentItem({ status: 'analyzing' });
+        this.reviewQueue.updateCurrentItem({ status: 'analyzing', error: undefined });
 
-        this.api.predict(item.file).subscribe({
+        this.api.predict(item.file, this.passedConf).subscribe({
             next: (res) => {
                 this.isLoading = false;
                 this.reviewQueue.updateCurrentItem({
@@ -89,10 +94,11 @@ export class ReviewComponent implements OnInit {
                 // The subscription will pick this up and call loadImage
             },
             error: (err) => {
+                console.error("Prediction Error Details:", err);
                 this.isLoading = false;
                 this.reviewQueue.updateCurrentItem({
                     status: 'error',
-                    error: err.message || 'Prediction failed'
+                    error: err.error?.detail || err.message || 'Prediction failed'
                 });
                 this.showToast('Prediction failed');
             }

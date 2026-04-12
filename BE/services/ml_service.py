@@ -26,48 +26,62 @@ class MLService:
         return list(self.logs)
 
     def reset_project(self):
-        """Reset project data to fresh state."""
-        self.log_message("Resetting project data...")
+        """Reset project data to factory settings."""
+        self.log_message("Resetting project data to factory settings...")
         
-        # Paths to clean
+        # Comprehensive list of paths to wipe
         targets = [
             ML_DIR / "datasets",
             ML_DIR / "runs",
-            ML_DIR / "uploads" # If we had one here
+            ML_DIR / "data" / "yolo_dataset",
+            ML_DIR / "data" / "yolo_dataset_used",
+            ML_DIR / "data" / "yolo_merged",
+            ML_DIR / "data" / "test_images",
+            ML_DIR / "label_studio_exports",
+            ML_DIR / "temp",
+            ML_DIR / "eval_output"
         ]
         
         for p in targets:
             if p.exists():
-                self.log_message(f"Deleting {p}")
+                self.log_message(f"Wiping {p.name}...")
                 shutil.rmtree(p, ignore_errors=True)
         
-        # Re-create empty
+        # Re-create critical empty structures
+        (ML_DIR / "data" / "test_images").mkdir(parents=True, exist_ok=True)
+        (ML_DIR / "data" / "yolo_dataset").mkdir(parents=True, exist_ok=True)
+        (ML_DIR / "data" / "yolo_merged").mkdir(parents=True, exist_ok=True)
         (ML_DIR / "datasets").mkdir(exist_ok=True)
-        self.model = None # Reset model in memory
-        self.load_model() # Will load base model
-        self.log_message("Project reset complete. Ready for fresh upload.")
+        
+        self.model = None 
+        self.log_message("Model reference cleared. Reloading base model...")
+        self.load_model()
+        
+        self.log_message("Project reset successful. You can now start with a fresh ZIP upload.")
 
     def load_model(self):
+        """Load the newest best.pt or fallback to base model."""
         runs_dir = ML_DIR / "runs" / "detect"
-        logger.info(f"ML load_model called, runs dir: {runs_dir}")
-        runs = sorted(
-            runs_dir.glob("*/weights/best.pt"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True
-        ) if runs_dir.exists() else []
-
-        if runs:
-            logger.info(f"Loading trained best.pt from {runs[0]}")
-            self.model = YOLO(str(runs[0]))
+        
+        # Look for the absolute latest best.pt across ALL subfolders
+        all_weights = list(runs_dir.rglob("weights/best.pt")) if runs_dir.exists() else []
+        if all_weights:
+            # Sort by modification time, newest first
+            newest_weight = max(all_weights, key=lambda p: p.stat().st_mtime)
+            self.log_message(f"🧠 Loading trained brain: {newest_weight.parent.parent.name}")
+            self.model = YOLO(str(newest_weight))
             return
 
-        base = ML_DIR / "yolov8n.pt"
-        if base.exists():
-            logger.info(f"No trained run, loading base model {base}")
-            self.model = YOLO(str(base))
-            return
+        # Fallback to base models
+        base_options = ["yolo11n.pt", "yolov8n.pt", "yolov8s.pt"]
+        for opt in base_options:
+            path = ML_DIR / opt
+            if path.exists():
+                self.log_message(f"ℹ️ Training not run yet. Using base model: {opt}")
+                self.model = YOLO(str(path))
+                return
 
-        logger.error("No model file found at runs or base. Inference will fail.")
+        self.log_message("⚠️ CRITICAL: No model found! ZIP upload required.")
         self.model = None
 
     def run_import_zip(self, zip_path: Path):
@@ -140,41 +154,46 @@ class MLService:
         logger.info(f"Using model type {type(self.model)} with conf {conf}")
         results = self.model.predict(source=str(image_path), conf=conf, verbose=False)
         result = results[0]
+        detections = []
         
-        if result.obb is not None:
-            # OBB Detection
-            logger.info("Found OBB results")
-            for obb in result.obb:
-                detections.append({
-                    "class": result.names[int(obb.cls)],
-                    "confidence": float(obb.conf),
-                    "box": obb.xyxy.tolist()[0], # Axis-aligned BBox for UI
-                    "poly": obb.xyxyxyxyn.tolist()[0] # Normalized polygon 0-1
-                })
-        elif result.masks is not None:
-             # Segmentation
-            logger.info("Found Segmentation results")
-            for i, mask in enumerate(result.masks):
-                 # result.boxes contains the bbox for each mask
-                 box = result.boxes[i].xyxy.tolist()[0]
-                 # result.masks.xyn is list of normalized segments (list of [pk, 2])
-                 # We take the first segment
-                 poly = mask.xyn[0].flatten().tolist()
-                 
-                 detections.append({
-                    "class": result.names[int(result.boxes[i].cls)],
-                    "confidence": float(result.boxes[i].conf),
-                    "box": box,
-                    "poly": poly
-                })
-        else:
-            # Standard Detection
-            for box in result.boxes:
-                detections.append({
-                    "class": result.names[int(box.cls)],
-                    "confidence": float(box.conf),
-                    "box": box.xyxy.tolist()[0] # [x1, y1, x2, y2]
-                })
+        try:
+            if result.obb is not None:
+                # OBB Detection
+                logger.info("Parsing OBB results")
+                for obb in result.obb:
+                    detections.append({
+                        "class": result.names[int(obb.cls)],
+                        "confidence": float(obb.conf),
+                        "box": obb.xyxy.tolist()[0],
+                        "poly": obb.xyxyxyxyn.tolist()[0]
+                    })
+            elif result.masks is not None:
+                # Segmentation
+                logger.info("Parsing Segmentation results")
+                for i, mask in enumerate(result.masks):
+                    box = result.boxes[i].xyxy.tolist()[0]
+                    poly = mask.xyn[0].flatten().tolist() if len(mask.xyn) > 0 else []
+                    
+                    detections.append({
+                        "class": result.names[int(result.boxes[i].cls)],
+                        "confidence": float(result.boxes[i].conf),
+                        "box": box,
+                        "poly": poly
+                    })
+            else:
+                # Standard Detection
+                logger.info("Parsing Standard results")
+                for box in result.boxes:
+                    detections.append({
+                        "class": result.names[int(box.cls)],
+                        "confidence": float(box.conf),
+                        "box": box.xyxy.tolist()[0]
+                    })
+        except Exception as e:
+            logger.error(f"Error parsing YOLO results: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise RuntimeError(f"Result parsing failed: {str(e)}")
             
         return detections
 

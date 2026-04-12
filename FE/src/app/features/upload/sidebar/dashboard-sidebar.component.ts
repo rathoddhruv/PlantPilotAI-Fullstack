@@ -75,6 +75,14 @@ import { ApiService, RunInfo } from '../../../core/services/api.service';
             </button>
           </div>
         </div>
+      <!-- Danger Zone -->
+      <div class="mt-8 pt-6 border-t border-gray-800">
+        <h3 class="text-sm font-bold text-red-500/80 uppercase mb-3">Danger Zone</h3>
+        <button (click)="resetProject()" 
+                class="w-full py-2.5 text-xs font-bold border border-red-900/50 bg-red-900/10 rounded-xl hover:bg-red-900/30 text-red-400 transition-all flex items-center justify-center gap-2">
+          <span>⚠️</span> RESET PROJECT
+        </button>
+        <p class="text-[10px] text-gray-600 mt-2 text-center">Deletes all datasets, runs, and model history.</p>
       </div>
 
     </div>
@@ -103,6 +111,17 @@ export class DashboardSidebarComponent implements OnInit {
     this.api.rollback(runName).subscribe({
       next: () => alert('Rollback successful. Model updated.'),
       error: (e) => alert('Rollback failed: ' + e.message)
+    });
+  }
+
+  resetProject() {
+    if (!confirm("CRITICAL: This will delete ALL training data and models. Continue?")) return;
+    this.api.resetProject().subscribe({
+      next: () => {
+        alert('Project reset successfully. Page will reload.');
+        window.location.reload();
+      },
+      error: (e) => alert('Reset failed: ' + e.message)
     });
   }
 }

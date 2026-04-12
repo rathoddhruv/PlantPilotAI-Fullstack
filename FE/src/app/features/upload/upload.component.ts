@@ -45,6 +45,10 @@ export class UploadComponent implements OnInit, OnDestroy {
     trainModel = 'yolov8n.pt';
     isFreshStart = false;
 
+    // Mode Toggle: train (with review/labeling) vs test (direct inference results)
+    appMode: 'train' | 'test' = 'train';
+    testConfidence = 0.25;
+
     runs: RunInfo[] = [];
     manifest: any = null;
 
@@ -103,6 +107,18 @@ export class UploadComponent implements OnInit, OnDestroy {
     }
 
     ngOnInit() {
+        // Restore persistsed mode
+        const savedMode = localStorage.getItem('plantpilot_app_mode');
+        if (savedMode === 'train' || savedMode === 'test') {
+            this.appMode = savedMode;
+        }
+
+        // Restore parameters
+        this.trainEpochs = Number(localStorage.getItem('plantpilot_train_epochs')) || 40;
+        this.trainImgsz = Number(localStorage.getItem('plantpilot_train_imgsz')) || 960;
+        this.trainModel = localStorage.getItem('plantpilot_train_model') || 'yolov8n.pt';
+        this.testConfidence = Number(localStorage.getItem('plantpilot_test_conf')) || 0.25;
+
         this.statusPollSub = interval(5000).pipe(
             startWith(0),
             switchMap(() => this.api.getRuns())
@@ -122,6 +138,18 @@ export class UploadComponent implements OnInit, OnDestroy {
                 this.currentModelName = 'yolov8s.pt (Fallback)';
             }
         });
+    }
+
+    setMode(mode: 'train' | 'test') {
+        this.appMode = mode;
+        localStorage.setItem('plantpilot_app_mode', mode);
+    }
+
+    saveParams() {
+        localStorage.setItem('plantpilot_train_epochs', this.trainEpochs.toString());
+        localStorage.setItem('plantpilot_train_imgsz', this.trainImgsz.toString());
+        localStorage.setItem('plantpilot_train_model', this.trainModel);
+        localStorage.setItem('plantpilot_test_conf', this.testConfidence.toString());
     }
 
     ngOnDestroy() {
@@ -159,28 +187,39 @@ export class UploadComponent implements OnInit, OnDestroy {
         this.error = '';
         const files = Array.from(fileList);
 
-        // Check for ZIP (Training Mode) - Enforce single file for now
-        const zipFile = files.find(f => f.name.endsWith('.zip'));
-        if (zipFile) {
-            if (files.length > 1) {
-                this.error = 'Please upload only one ZIP file at a time for training.';
+        if (this.appMode === 'train') {
+            // Training Mode logic
+            const zipFile = files.find(f => f.name.endsWith('.zip'));
+            if (zipFile) {
+                if (files.length > 1) {
+                    this.error = 'Please upload only one ZIP file at a time for training.';
+                    return;
+                }
+                this.addLog("ZIP file dropped: " + zipFile.name);
+                this.startZipFlow(zipFile);
                 return;
             }
-            this.addLog("ZIP file dropped: " + zipFile.name);
-            this.startZipFlow(zipFile);
-            return;
-        }
 
-        // Check for Images (Prediction Mode)
-        const imageFiles = files.filter(f => f.type.startsWith('image/'));
-        if (imageFiles.length === 0) {
-            this.error = 'No valid images found. Use ZIP for training or Images for prediction.';
-            return;
-        }
+            const imageFiles = files.filter(f => f.type.startsWith('image/'));
+            if (imageFiles.length > 0) {
+                this.addLog(`Queueing ${imageFiles.length} images for ACTIVE LEARNING.`);
+                this.reviewQueue.addFiles(imageFiles);
+                this.router.navigate(['/review'], { state: { testMode: false, conf: this.testConfidence } });
+            } else {
+                this.error = 'Drop a ZIP for project init or Images for active learning.';
+            }
+        } else {
+            // TEST Mode logic
+            const imageFiles = files.filter(f => f.type.startsWith('image/'));
+            if (imageFiles.length === 0) {
+                this.error = 'Test mode requires image files (.jpg, .png). ZIPs are for training.';
+                return;
+            }
 
-        this.addLog(`Queueing ${imageFiles.length} images for review.`);
-        this.reviewQueue.addFiles(imageFiles);
-        this.router.navigate(['/review']);
+            this.addLog(`Testing model with ${imageFiles.length} items...`);
+            this.reviewQueue.addFiles(imageFiles);
+            this.router.navigate(['/review'], { state: { testMode: true, conf: this.testConfidence } });
+        }
     }
 
     // --- Process Flow ---

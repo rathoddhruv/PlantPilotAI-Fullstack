@@ -7,21 +7,40 @@
             class="flex items-center text-gray-500 hover:text-gray-900 font-medium transition-colors">
             <span class="mr-2 text-xl">←</span> Back
         </button>
-        <h1 class="font-bold text-gray-800">Review Prediction</h1>
-        <div class="flex items-center space-x-2 text-xs text-gray-400">
-            <span class="border px-2 py-1 rounded bg-gray-50">← Reject</span>
-            <span class="border px-2 py-1 rounded bg-gray-50">→ Accept</span>
+        <h1 class="font-bold text-gray-800">{{ isTestMode ? 'Inference Result' : 'Review Prediction' }}</h1>
+        <div class="flex items-center space-x-2 text-xs">
+            <span *ngIf="isTestMode"
+                class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full font-bold animate-pulse">TEST MODE</span>
+            <div *ngIf="!isTestMode" class="flex items-center space-x-2 text-gray-400">
+                <span class="border px-2 py-1 rounded bg-gray-50">← Reject</span>
+                <span class="border px-2 py-1 rounded bg-gray-50">→ Accept</span>
+            </div>
         </div>
     </div>
 
-    <!-- Scrollable Content -->
+    <!-- ... (rest of scrollable content code) ... -->
     <div class="flex-1 overflow-y-auto p-6">
         <div class="max-w-4xl mx-auto space-y-6">
-
             <!-- Canvas Container -->
             <div class="relative bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden text-center p-4">
-                <canvas #canvas class="max-w-full h-auto mx-auto rounded-lg shadow-inner bg-gray-100"></canvas>
-                <div *ngIf="!prediction" class="p-10 text-gray-400 italic">No image loaded</div>
+                <canvas #canvas class="max-w-full h-auto mx-auto rounded-lg shadow-inner bg-gray-100"
+                    [class.hidden]="!prediction"></canvas>
+
+                <div *ngIf="!prediction && !current?.error"
+                    class="p-10 flex flex-col items-center justify-center space-y-4">
+                    <div class="w-12 h-12 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
+                    <p class="text-gray-400 italic">Pre-processing image...</p>
+                </div>
+
+                <div *ngIf="current?.error"
+                    class="p-10 flex flex-col items-center justify-center space-y-4 text-red-500">
+                    <span class="text-4xl text-red-300">⚠️</span>
+                    <p class="font-bold">Prediction failed</p>
+                    <p class="text-xs text-red-400">{{ current?.error }}</p>
+                    <button (click)="runPrediction(current!)"
+                        class="mt-2 text-xs bg-red-100 px-4 py-2 rounded-full hover:bg-red-200 transition-colors">Retry
+                        Prediction</button>
+                </div>
             </div>
 
             <!-- Correction Panel -->
@@ -29,9 +48,10 @@
                 class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in-up">
 
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide">Detections ({{
-                        prediction.detections.length }})</h3>
-                    <div class="space-x-2">
+                    <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide">
+                        {{ isTestMode ? 'Detected Objects' : 'Detections' }} ({{ prediction.detections.length }})
+                    </h3>
+                    <div class="space-x-2" *ngIf="!isTestMode">
                         <button (click)="markAll(true)" class="text-xs text-green-600 font-bold hover:underline">Mark
                             All Correct</button>
                         <span class="text-gray-300">|</span>
@@ -47,6 +67,7 @@
 
                         <div class="flex items-center space-x-3">
                             <input type="checkbox" [checked]="!det['ignore']" (change)="toggleIgnore(det)"
+                                *ngIf="!isTestMode"
                                 class="w-5 h-5 text-green-600 rounded focus:ring-green-500 border-gray-300 cursor-pointer">
 
                             <span
@@ -54,13 +75,14 @@
                                 i + 1 }}</span>
 
                             <div>
+                                <p class="text-xs font-bold text-gray-700">{{ det.class }}</p>
                                 <p class="text-[10px] text-gray-400 uppercase font-mono">Confidence: {{ (det.confidence
                                     * 100).toFixed(0) }}%</p>
                             </div>
                         </div>
 
                         <!-- Class Selector -->
-                        <div class="flex items-center space-x-2" [class.opacity-50]="det['ignore']">
+                        <div class="flex items-center space-x-2" [class.opacity-50]="det['ignore']" *ngIf="!isTestMode">
                             <label class="text-xs font-semibold text-gray-600 mr-2">Class:</label>
                             <select [(ngModel)]="det.class" (change)="redraw()" [disabled]="!!det['ignore']"
                                 class="block w-40 rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm py-1.5 bg-white">
@@ -70,16 +92,27 @@
                     </div>
                 </div>
 
-                <p class="text-xs text-blue-500 mt-4 flex items-center">
+                <p class="text-xs text-blue-500 mt-4 flex items-center" *ngIf="!isTestMode">
                     <span class="mr-1">ℹ️</span> Uncheck boxes to ignore incorrect detections. Correct classes if
                     needed. Then click Accept.
                 </p>
+                <div *ngIf="isTestMode"
+                    class="mt-4 p-3 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium border border-blue-100 flex items-center">
+                    <span class="mr-2">🔍</span> These results show exactly what the model "sees" currently.
+                </div>
             </div>
 
             <!-- Empty State -->
             <div *ngIf="prediction && prediction.detections.length === 0"
-                class="bg-yellow-50 text-yellow-800 p-4 rounded-xl border border-yellow-200 text-center">
-                No objects detected. You can reject this image or accept it as empty background.
+                class="bg-yellow-50 text-yellow-800 p-8 rounded-2xl border border-yellow-200 text-center animate-fade-in">
+                <div class="text-4xl mb-4">🔍</div>
+                <h2 class="text-lg font-bold mb-2">{{ isTestMode ? 'No Objects Recognized' : 'Neutral Background' }}
+                </h2>
+                <p class="text-sm opacity-80 max-w-md mx-auto">
+                    {{ isTestMode ? 'The model did not find any plants it recognizes in this image. Is this correct?' :
+                    'No objects detected. You can reject this image or accept it as empty background to reduce false
+                    positives.' }}
+                </p>
             </div>
 
         </div>
@@ -88,15 +121,32 @@
     <!-- Sticky Bottom Action Bar -->
     <div
         class="h-20 bg-white border-t border-gray-200 flex items-center justify-center space-x-6 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex-shrink-0">
-        <button (click)="reject()"
-            class="group flex flex-col items-center justify-center w-32 h-14 rounded-xl border-2 border-transparent bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-200 active:scale-95 transition-all">
-            <span class="font-bold">Reject</span>
-        </button>
 
-        <button (click)="accept()"
-            class="group flex flex-col items-center justify-center w-48 h-14 rounded-xl shadow-lg bg-green-600 text-white hover:bg-green-700 active:scale-95 transition-all">
-            <span class="font-bold text-lg">Accept & Train</span>
-        </button>
+        <!-- Case A: Test Mode with NO detections (Validation of Negative) -->
+        <ng-container *ngIf="isTestMode && prediction && prediction.detections.length === 0">
+            <button (click)="reject()"
+                class="group flex flex-col items-center justify-center w-48 h-14 rounded-xl border-2 border-red-200 bg-red-50 text-red-600 hover:bg-red-100 active:scale-95 transition-all">
+                <span class="font-bold">❌ Incorrect (Missed)</span>
+            </button>
+
+            <button (click)="accept()"
+                class="group flex flex-col items-center justify-center w-48 h-14 rounded-xl shadow-lg bg-green-600 text-white hover:bg-green-700 active:scale-95 transition-all">
+                <span class="font-bold text-lg">✅ Correct (None)</span>
+            </button>
+        </ng-container>
+
+        <!-- Case B: Regular Active Learning or Test Mode with Detections -->
+        <ng-container *ngIf="!isTestMode || (prediction && prediction.detections.length > 0)">
+            <button (click)="reject()"
+                class="group flex flex-col items-center justify-center w-32 h-14 rounded-xl border-2 border-transparent bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-200 active:scale-95 transition-all">
+                <span class="font-bold">{{ isTestMode ? 'Discard' : 'Reject' }}</span>
+            </button>
+
+            <button (click)="accept()"
+                class="group flex flex-col items-center justify-center w-48 h-14 rounded-xl shadow-lg bg-green-600 text-white hover:bg-green-700 active:scale-95 transition-all">
+                <span class="font-bold text-lg">{{ isTestMode ? 'Confirm & Next' : 'Accept & Train' }}</span>
+            </button>
+        </ng-container>
     </div>
 
     <!-- Toast -->

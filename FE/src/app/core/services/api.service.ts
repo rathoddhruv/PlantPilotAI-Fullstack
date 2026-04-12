@@ -62,9 +62,10 @@ export class ApiService {
         return this.http.post(`${API_URL}/project/init`, formData);
     }
 
-    predict(file: File): Observable<PredictionResult> {
+    predict(file: File, conf: number = 0.25): Observable<PredictionResult> {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('conf', conf.toString());
         return this.http.post<PredictionResult>(`${API_URL}/inference/predict`, formData);
     }
 

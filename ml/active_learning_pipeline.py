@@ -51,6 +51,36 @@ def _manifest_append(event: str, extra: dict):
         print(f"Manifest append failed: {e}")  # do not break training if manifest fails
 
 
+def _sync_yaml(yaml_path: Path, data_path: Path):
+    """Update YAML path and names from classes.txt; data_path relative to ml/"""
+    try:
+        classes_file = data_path / "classes.txt"
+        if not classes_file.exists():
+            classes_file = data_path / "labels" / "train" / "classes.txt"
+        
+        names_dict = {}
+        if classes_file.exists():
+            lines = classes_file.read_text(encoding="utf-8").splitlines()
+            names_dict = {i: line.strip() for i, line in enumerate(lines) if line.strip()}
+        
+        if not names_dict:
+            # Fallback for safe training
+            names_dict = {0: "object"}
+            
+        content = [
+            f"path: {data_path.as_posix()}",
+            "train: images/train",
+            "val: images/train",
+            "names:",
+        ]
+        for idx, nm in names_dict.items():
+            content.append(f"  {idx}: {nm}")
+            
+        yaml_path.write_text("\n".join(content), encoding="utf-8")
+        print(f"Synced {yaml_path.name} to {data_path} with {len(names_dict)} classes.")
+    except Exception as e:
+        print(f"⚠️ YAML Sync failed: {e}")
+
 if __name__ == '__main__':
     # Required for Windows multiprocessing
     freeze_support()
@@ -103,12 +133,24 @@ if __name__ == '__main__':
             "Detected initial Label Studio dataset. Training from yolo_dataset directly..."
         )
     
+        _sync_yaml(Path(YOLO_DATASET_YAML_ABS), Path("data/yolo_dataset"))
         dataset_yaml = YOLO_DATASET_YAML_ABS  # use absolute yaml path
     
         # remove leftover backup labels if any
         for txt_file in initial_labels.glob("*.bak"):
             txt_file.unlink()
     
+        # ALWAYS normalize Label Studio coordinates as it often exports in pixels
+        print("Normalizing initial Label Studio dataset coordinates...")
+        # Redirect to utils/fix_non_normalized_labels.py with a target directory?
+        # Actually our script currently hardcodes the path. Let's run it.
+        # But we need to make sure those folders match what the script expects.
+        
+        # The script expects 'data/yolo_merged'. Let's temporarily copy yolo_dataset to yolo_merged?
+        # Actually, let's just run a simple manual normalization here for safety.
+        from utils.fix_non_normalized_labels_logic import normalize_folder
+        normalize_folder(initial_images, initial_labels)
+
         # always write artifacts to a stable folder under ml/runs/detect/train
         _archive_existing_train()  # move previous 'train' to archive if it exists
     
@@ -122,6 +164,13 @@ if __name__ == '__main__':
         if not model_name.endswith('.pt'):
              model_name += '.pt'
         
+        # Handle the common typo 'yolov11' (official is 'yolo11')
+        if model_name.startswith('yolov11'):
+            alt_name = model_name.replace('yolov11', 'yolo11')
+            if not Path(model_name).exists() and Path(alt_name).exists():
+                print(f"Falling back from {model_name} to {alt_name}")
+                model_name = alt_name
+
         task_type = get_task(model_name)
         print(f"Inferred task type: {task_type}")
 
@@ -285,6 +334,10 @@ if __name__ == '__main__':
         # However, we can use args.model as a hint, assuming user keeps using same architecture.
         # Or `get_task` on `args.model`.
         task_type = get_task(args.model) 
+
+        # SYNC YAML BEFORE FINE-TUNING!
+        _sync_yaml(Path(YOLO_MERGED_YAML_ABS), Path("data/yolo_merged"))
+        dataset_yaml = YOLO_MERGED_YAML_ABS
         
         print(f"Found {len(train_images)} images and {len(train_labels)} labels.")
         # force stable save path under ml/runs/detect/train

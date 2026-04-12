@@ -1,6 +1,5 @@
-path: data\yolo_merged
+path: data/yolo_merged
 train: images/train
 val: images/train
 names:
-  0: dandelion
-  1: hydrangea
+  0: object

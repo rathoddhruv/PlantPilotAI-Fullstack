@@ -1,62 +1,18 @@
-import cv2
-from pathlib import Path
 import sys
+import os
+from pathlib import Path
 
-sys.stdout.reconfigure(encoding="utf-8")
+# Add mother directory to paths so we can import the logic
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from fix_non_normalized_labels_logic import normalize_folder
 
-
-LABELS_DIR = Path("data/yolo_merged/labels/train")
-IMAGES_DIR = Path("data/yolo_merged/images/train")
-BACKUP_DIR = Path("data/yolo_merged/labels/backup_non_normalized")
-
-BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-
-def normalize_label_line(line, img_w, img_h):
-    parts = line.strip().split()
-    if len(parts) != 5:
-        return None
-    cls, x, y, w, h = map(float, parts)
-    return f"{int(cls)} {x/img_w:.6f} {y/img_h:.6f} {w/img_w:.6f} {h/img_h:.6f}\n"
-
-fixed = 0
-skipped = 0
-for label_file in LABELS_DIR.glob("*.txt"):
-    img_file = IMAGES_DIR / (label_file.stem + ".jpg")
-    if not img_file.exists():
-        print(f" image missing for: {label_file.name}")
-        continue
-
-    img = cv2.imread(str(img_file))
-    if img is None:
-        print(f" cannot open image: {img_file.name}")
-        continue
-
-    h, w = img.shape[:2]
-    lines = label_file.read_text().strip().splitlines()
-    new_lines = []
-
-    for line in lines:
-        norm = normalize_label_line(line, w, h)
-        if norm:
-            new_lines.append(norm)
-
-    if new_lines:
-        # backup original
-        try:
-            (BACKUP_DIR / label_file.name).unlink(missing_ok=True)
-        except Exception as e:
-            print(f"⚠️ error removing backup file: {e}")
-        label_file.replace(
-            BACKUP_DIR / label_file.name
-        )  # os.replace: overwrites on Windows
-        # write normalized
-        with open(label_file, "w") as f:
-            f.writelines(new_lines)
-        fixed += 1
-    else:
-        print(f"skipped empty or invalid: {label_file.name}")
-        skipped += 1
-
-print(f"\nfixed {fixed} label files")
-print(f"skipped {skipped} files")
-print(" backup of originals saved in:", BACKUP_DIR)
+if __name__ == "__main__":
+    # Standard Merged Paths
+    IMAGES = Path("data/yolo_merged/images/train")
+    LABELS = Path("data/yolo_merged/labels/train")
+    
+    if not IMAGES.exists() or not LABELS.exists():
+        print(f"Error: Could not find {IMAGES} or {LABELS}")
+        sys.exit(1)
+        
+    normalize_folder(IMAGES, LABELS)
