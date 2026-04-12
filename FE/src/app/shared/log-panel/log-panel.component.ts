@@ -15,33 +15,33 @@ export interface LogEntry {
     standalone: true,
     imports: [CommonModule],
     template: `
-    <div class="flex flex-col border-t border-gray-700 bg-[#0d1117] text-gray-400 font-mono text-xs transition-none shadow-[0_-4px_20px_rgba(0,0,0,0.3)] relative"
+    <div class="flex flex-col border-t border-slate-800 bg-[#020617] text-slate-400 font-mono text-xs transition-none shadow-[0_-10px_30px_rgba(0,0,0,0.5)] relative"
          [style.height.px]="height">
       
       <!-- Resizer Handle -->
-      <div class="absolute top-0 left-0 w-full h-1 cursor-row-resize hover:bg-blue-500 bg-gray-800 transition-colors z-50 select-none"
+      <div class="absolute top-0 left-0 w-full h-1 cursor-row-resize hover:bg-indigo-500 bg-slate-800 transition-colors z-50 select-none"
            (mousedown)="startResize($event)"></div>
 
       <!-- Header -->
-      <div class="flex items-center justify-between px-4 py-2 bg-[#161b22] border-b border-gray-800 select-none flex-shrink-0">
+      <div class="flex items-center justify-between px-4 py-2 bg-[#0f172a] border-b border-slate-800 select-none flex-shrink-0">
           <div class="flex items-center gap-2">
-              <span class="font-bold text-gray-300">DEV CONSOLE</span>
-              <span class="text-gray-600">~ backend-stream</span>
-              <span class="text-[10px] text-gray-500 ml-2" *ngIf="!autoScroll">(Auto-scroll Paused)</span>
+              <span class="font-black text-slate-300 tracking-tighter uppercase text-[10px]">Console</span>
+              <span class="text-slate-600 text-[10px]">:: network-stream</span>
+              <span class="text-[9px] text-slate-500 italic ml-2" *ngIf="!autoScroll">(Monitoring Paused)</span>
           </div>
           <div class="flex items-center gap-4">
-              <button (click)="clearLogs()" class="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-[10px] text-gray-300 transition-colors">
-                  Clear
+              <button (click)="clearLogs()" class="px-3 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[9px] font-bold text-slate-300 transition-all uppercase">
+                  Flush
               </button>
-              <div class="text-[10px] text-gray-600 flex gap-4">
-                 <span>{{ devLogs.length }} LINES</span>
+              <div class="text-[10px] text-slate-600 flex gap-4 font-bold">
+                 <span>{{ devLogs.length }} LNS</span>
               </div>
           </div>
       </div>
 
       <!-- Log Output -->
       <div #scrollContainer 
-           class="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent font-medium bg-[#0d1117]"
+           class="flex-1 overflow-y-auto p-4 space-y-1.5 custom-scrollbar bg-[#020617]"
            (scroll)="onScroll()">
           
           <div *ngFor="let log of devLogs; let i = index"
@@ -82,7 +82,7 @@ export class LogPanelComponent implements OnInit, OnDestroy {
     constructor(private api: ApiService) { }
 
     ngOnInit() {
-        this.logSub = interval(2500).pipe(
+        this.logSub = interval(5000).pipe(
             switchMap(() => this.api.getLogs())
         ).subscribe({
             next: (res) => {

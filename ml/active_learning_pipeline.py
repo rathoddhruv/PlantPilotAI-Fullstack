@@ -12,20 +12,23 @@ from config_loader import (
 import torch
 from multiprocessing import freeze_support
 
+# Constants for absolute pathing
+ML_DIR = Path(__file__).resolve().parent
+RUNS_DETECT = ML_DIR / "runs" / "detect"
+TRAIN_STABLE = RUNS_DETECT / "train"
+
 def get_device():
     return "0" if torch.cuda.is_available() else "cpu"
 
 def _archive_existing_train():
     """move current runs/detect/train into runs/detect/archive/train_<timestamp>"""
-    runs_root = Path("runs") / "detect"
-    train_dir = runs_root / "train"
-    if not train_dir.exists():
+    if not TRAIN_STABLE.exists():
         return None
-    archive = runs_root / "archive"
+    archive = RUNS_DETECT / "archive"
     archive.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dst = archive / f"train_{ts}"
-    shutil.move(str(train_dir), str(dst))
+    shutil.move(str(TRAIN_STABLE), str(dst))
     print(f"archived previous train to: {dst}")
     return dst
 
@@ -33,9 +36,8 @@ def _archive_existing_train():
 def _manifest_append(event: str, extra: dict):
     """append a small record to runs/detect/manifest.json; never fail the pipeline"""
     try:
-        runs_detect = Path("runs") / "detect"
-        runs_detect.mkdir(parents=True, exist_ok=True)
-        mf = runs_detect / "manifest.json"
+        RUNS_DETECT.mkdir(parents=True, exist_ok=True)
+        mf = RUNS_DETECT / "manifest.json"
         data = []
         if mf.exists():
             try:
@@ -215,16 +217,16 @@ if __name__ == '__main__':
             results = model.train(
                 task=task_type,
                 data=str(dataset_yaml),
-                imgsz=args.imgsz,  # Use CLI argument
+                imgsz=args.imgsz,
                 device=device,
-                project="runs/detect",
+                project=str(RUNS_DETECT),
                 name="train",
                 exist_ok=True,
                 resume=False,
                 val=False,
-                epochs=args.epochs,  # Use CLI argument instead of hardcoded 100
+                epochs=args.epochs,
                 lr0=0.005,
-                amp=False  # Disable AMP to avoid 'Half' precision errors on some devices
+                amp=False
             )
             print("YOLO initial training completed successfully")
         except Exception as e:
@@ -232,9 +234,9 @@ if __name__ == '__main__':
             sys.exit(1)
     
         # verify artifacts exist before renaming the dataset
-        best = Path("runs") / "detect" / "train" / "weights" / "best.pt"
+        best = RUNS_DETECT / "train" / "weights" / "best.pt"
         if not best.exists():
-            print("No training artifacts found at", best)
+            print(f"No training artifacts found at {best}")
             sys.exit(1)
     
         # record manifest for the one-time initial training
@@ -385,33 +387,32 @@ if __name__ == '__main__':
             "yolo",
             f"task={task_type}",
             "mode=train",
-            f"model={MODEL_PATH}", # FIX: Use MODEL_PATH for fine-tuning!
+            f"model={MODEL_PATH}",
             f"data={dataset_yaml}",
             f"imgsz={args.imgsz}",
             "device=0",
-            "project=runs/detect",  # stable root
-            "name=train",  # always 'train'
+            f"project={RUNS_DETECT}",  # USE ABSOLUTE PATH
+            "name=train",
             "exist_ok=True",
             "resume=False",
             "val=False",
-            f"epochs={args.epochs}",  # increased epochs for better training
-            "lr0=0.005",   # initial learning rate
-            "amp=False",   # Disable AMP
+            f"epochs={args.epochs}",
+            "lr0=0.005",
+            "amp=False",
         ]
     
         print(f"Running YOLO training (Fine-tuning from {MODEL_PATH})...")
         result = subprocess.run(
             train_args,
-            check=False # Allow it to fail without raising immediate exception, we handle returncode
+            check=False
         )
     
         if result.returncode != 0:
             print("YOLO training failed to execute properly.")
-            print(result.stderr or result.stdout)
             sys.exit(1)
     
         # after training, backup old model and update MODEL_PATH with new best
-        final_best = Path("runs/detect/train/weights/best.pt")
+        final_best = RUNS_DETECT / "train" / "weights" / "best.pt"
         target_model = CONFIG_MODEL_PATH
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_model = Path(f"temp/last_model_{timestamp}.pt")

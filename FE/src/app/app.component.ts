@@ -14,4 +14,9 @@ import { LogPanelComponent } from './shared/log-panel/log-panel.component';
 })
 export class AppComponent {
   title = 'plant-pilot';
+  isConsoleVisible = true;
+
+  toggleConsole() {
+    this.isConsoleVisible = !this.isConsoleVisible;
+  }
 }

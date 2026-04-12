@@ -26,10 +26,16 @@ class MLService:
         return list(self.logs)
 
     def reset_project(self):
-        """Reset project data to factory settings."""
-        self.log_message("Resetting project data to factory settings...")
+        """Reset project data to factory settings with aggressive file unlocking."""
+        self.log_message("Resetting project data...")
         
-        # Comprehensive list of paths to wipe
+        # 1. Force release of model from memory to unlock files on disk
+        self.model = None
+        import gc
+        gc.collect()
+        self.log_message("Model cleared from memory.")
+
+        # 2. Comprehensive list of paths to wipe
         targets = [
             ML_DIR / "datasets",
             ML_DIR / "runs",
@@ -44,20 +50,25 @@ class MLService:
         
         for p in targets:
             if p.exists():
-                self.log_message(f"Wiping {p.name}...")
-                shutil.rmtree(p, ignore_errors=True)
+                try:
+                    self.log_message(f"Wiping {p.name}...")
+                    shutil.rmtree(p, ignore_errors=True)
+                    # Double check
+                    if p.exists():
+                        self.log_message(f"⚠️ {p.name} still exists, attempting force delete...")
+                        shutil.rmtree(p) 
+                except Exception as e:
+                    self.log_message(f"❌ Could not wipe {p.name}: {e}")
         
-        # Re-create critical empty structures
+        # 3. Re-create critical empty structures
         (ML_DIR / "data" / "test_images").mkdir(parents=True, exist_ok=True)
         (ML_DIR / "data" / "yolo_dataset").mkdir(parents=True, exist_ok=True)
         (ML_DIR / "data" / "yolo_merged").mkdir(parents=True, exist_ok=True)
         (ML_DIR / "datasets").mkdir(exist_ok=True)
         
-        self.model = None 
-        self.log_message("Model reference cleared. Reloading base model...")
+        # 4. Final reload of clean state
         self.load_model()
-        
-        self.log_message("Project reset successful. You can now start with a fresh ZIP upload.")
+        self.log_message("Project reset successful.")
 
     def load_model(self):
         """Load the newest best.pt or fallback to base model."""
@@ -142,59 +153,62 @@ class MLService:
         return "Success"
 
     def predict(self, image_path: Path, conf=0.25):
-        """Run inference on a single image."""
-        logger.info(f"Predict request for {image_path}")
-        if not self.model:
-            logger.warning("Model is None, will attempt reload")
-            self.load_model()
-            if not self.model:
-                logger.error("No model loaded after reload")
-                raise RuntimeError("No model loaded")
+        """Run inference on a single image with fusing error protection."""
+        if not self.model: self.load_model()
+        if not self.model: raise RuntimeError("No model loaded")
 
-        logger.info(f"Using model type {type(self.model)} with conf {conf}")
-        results = self.model.predict(source=str(image_path), conf=conf, verbose=False)
+        try:
+            results = self.model.predict(source=str(image_path), conf=conf, verbose=False)
+            return self._extract_detections(results)
+        except AttributeError as e:
+            if "bn" in str(e):
+                self.log_message("⚠️ Fusing error detected. Applying bypass...")
+                # Try prediction without automatic fusion
+                try:
+                    results = self.model.predict(source=str(image_path), conf=conf, verbose=False, fuse=False)
+                    return self._extract_detections(results)
+                except Exception as inner_e:
+                    self.log_message(f"🚨 Bypass failed: {inner_e}")
+            raise e
+        except Exception as e:
+            logger.error(f"Prediction failed: {e}")
+            raise e
+
+    def _extract_detections(self, results):
+        """Helper to safely extract detections from YOLO results."""
+        if not results: return []
         result = results[0]
         detections = []
         
-        try:
-            if result.obb is not None:
-                # OBB Detection
-                logger.info("Parsing OBB results")
-                for obb in result.obb:
-                    detections.append({
-                        "class": result.names[int(obb.cls)],
-                        "confidence": float(obb.conf),
-                        "box": obb.xyxy.tolist()[0],
-                        "poly": obb.xyxyxyxyn.tolist()[0]
-                    })
-            elif result.masks is not None:
-                # Segmentation
-                logger.info("Parsing Segmentation results")
-                for i, mask in enumerate(result.masks):
-                    box = result.boxes[i].xyxy.tolist()[0]
-                    poly = mask.xyn[0].flatten().tolist() if len(mask.xyn) > 0 else []
-                    
-                    detections.append({
-                        "class": result.names[int(result.boxes[i].cls)],
-                        "confidence": float(result.boxes[i].conf),
-                        "box": box,
-                        "poly": poly
-                    })
-            else:
-                # Standard Detection
-                logger.info("Parsing Standard results")
-                for box in result.boxes:
-                    detections.append({
-                        "class": result.names[int(box.cls)],
-                        "confidence": float(box.conf),
-                        "box": box.xyxy.tolist()[0]
-                    })
-        except Exception as e:
-            logger.error(f"Error parsing YOLO results: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            raise RuntimeError(f"Result parsing failed: {str(e)}")
-            
+        # Check for OBB (Oriented Bounding Boxes)
+        if getattr(result, 'obb', None) is not None:
+            for i in range(len(result.obb.cls)):
+                detections.append({
+                    "class": result.names[int(result.obb.cls[i])],
+                    "confidence": float(result.obb.conf[i]),
+                    "box": result.obb.xyxy[i].tolist(),
+                    "poly": result.obb.xyxyxyxyn[i].tolist()
+                })
+        # Check for Segmentation Masks
+        elif getattr(result, 'masks', None) is not None:
+            for i in range(len(result.masks.cls)):
+                detections.append({
+                    "class": result.names[int(result.boxes[i].cls)],
+                    "confidence": float(result.boxes[i].conf),
+                    "box": result.boxes.xyxy[i].tolist(),
+                    "poly": result.masks.xyn[i].tolist()
+                })
+        # Standard Bounding Boxes
+        else:
+            for box in result.boxes:
+                # Handle box.cls being a tensor
+                cls_id = int(box.cls[0]) if hasattr(box.cls, "__len__") else int(box.cls)
+                conf_val = float(box.conf[0]) if hasattr(box.conf, "__len__") else float(box.conf)
+                detections.append({
+                    "class": result.names[cls_id],
+                    "confidence": conf_val,
+                    "box": box.xyxy[0].tolist() if hasattr(box.xyxy[0], "tolist") else box.xyxy.tolist()
+                })
         return detections
 
     def save_annotation(self, filename: str, detections: list, width: int, height: int):

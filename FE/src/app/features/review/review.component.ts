@@ -1,10 +1,11 @@
-import { Component, ElementRef, HostListener, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
-import { ApiService, PredictionResult, CLASS_NAMES } from '../../core/services/api.service';
-import { ReviewQueueService, ReviewItem } from '../../core/services/review-queue.service';
 import { FormsModule } from '@angular/forms';
-import { switchMap } from 'rxjs';
+import { ApiService, PredictionResult } from '../../core/services/api.service';
+import { ReviewQueueService, ReviewItem } from '../../core/services/review-queue.service';
+import { switchMap, Subscription } from 'rxjs';
+import { ToastService } from '../../core/services/toast.service';
+import { Router } from '@angular/router';
 
 @Component({
     selector: 'app-review',
@@ -13,167 +14,132 @@ import { switchMap } from 'rxjs';
     templateUrl: './review.component.html',
     styleUrls: ['./review.component.scss']
 })
-export class ReviewComponent implements OnInit {
-    @ViewChild('canvas', { static: false }) canvasRef!: ElementRef<HTMLCanvasElement>; // Static false because it might be in ngIf or layout shift
+export class ReviewComponent implements OnInit, OnDestroy {
+    @ViewChild('canvas') canvas!: ElementRef<HTMLCanvasElement>;
+    // Redraw trigger comment
 
     current: ReviewItem | null = null;
-    queueStats: { current: number, total: number } = { current: 0, total: 0 };
-    isLoading = false;
-
     prediction: PredictionResult | null = null;
-    image: HTMLImageElement = new Image();
-    toastMessage: string | null = null;
-    classNames = CLASS_NAMES;
+    image = new Image();
+    private sub: Subscription | null = null;
+
+    isLoading = false;
     isTestMode = false;
-    passedConf = 0.25;
+    toastMessage: string | null = null;
+    highlightedIndex: number | null = null;
+    private toastTimeout: any;
+    private highlightTimeout: any;
+
+    classOptions = ['Dandelion', 'Hydrangea'];
+    classNames = ['Dandelion', 'Hydrangea'];
 
     constructor(
-        private router: Router,
         private api: ApiService,
-        private reviewQueue: ReviewQueueService
-    ) {
-        const nav = this.router.getCurrentNavigation();
-        if (nav?.extras.state) {
-            if (nav.extras.state['testMode']) this.isTestMode = true;
-            if (nav.extras.state['conf']) this.passedConf = nav.extras.state['conf'];
-        }
-    }
+        private reviewQueue: ReviewQueueService,
+        private toast: ToastService,
+        private router: Router
+    ) { }
 
     ngOnInit() {
-        this.reviewQueue.currentItem$.subscribe(item => {
-            this.current = item;
-            if (this.current) {
-                // If this is a new file pending analysis, or we just switched to it?
-                // If it already has prediction, just show it.
-                // If it is 'pending' and has no prediction, run predict.
-                if (this.current.status === 'pending' && !this.current.prediction && !this.current.error) {
-                    this.runPrediction(this.current);
-                } else if (this.current.prediction) {
-                    this.prediction = this.current.prediction;
-                    this.loadImage(this.current.prediction.url);
-                }
-            } else {
-                // Queue is empty or reset
-                // Check if we just finished?
-                if (this.queueStats.total > 0 && this.queueStats.current > this.queueStats.total) {
-                    // Done?
-                }
+        const state = window.history.state;
+        if (state) {
+            this.isTestMode = !!state.testMode;
+        }
+
+        const initial = this.reviewQueue.currentItem$.value;
+        if (initial) {
+            this.current = initial;
+            this.loadPrediction(initial);
+        }
+
+        this.sub = this.reviewQueue.currentItem$.subscribe((item: ReviewItem | null) => {
+            if (item && item !== this.current) {
+                this.current = item;
+                this.loadPrediction(item);
             }
         });
+    }
 
-        this.reviewQueue.queueStats$.subscribe(stats => {
-            this.queueStats = stats;
-        });
+    ngOnDestroy() {
+        if (this.sub) this.sub.unsubscribe();
+        if (this.toastTimeout) clearTimeout(this.toastTimeout);
+        if (this.highlightTimeout) clearTimeout(this.highlightTimeout);
+    }
 
-        // If queue is empty on init, redirect?
-        // Timeout to allow subscription to fire if synchronous
-        setTimeout(() => {
-            if (!this.reviewQueue.getQueue().length) {
-                // Fallback: Check if we have state from router (legacy single file support or direct link?)
-                // If not, go back to upload
-                // this.router.navigate(['/']);
-                // Actually, let's just stay here or show "No images".
-            }
-        }, 100);
+    get queueStats() {
+        return this.reviewQueue.getStats();
     }
 
     runPrediction(item: ReviewItem) {
+        this.loadPrediction(item);
+    }
+
+    private loadPrediction(item: ReviewItem) {
+        if (!item.file) return;
         this.isLoading = true;
-        this.prediction = null; // Clear stale data
+        this.prediction = null;
 
-        // Optimistic update: analyzing
-        this.reviewQueue.updateCurrentItem({ status: 'analyzing', error: undefined });
-
-        this.api.predict(item.file, this.passedConf).subscribe({
-            next: (res) => {
+        this.api.predict(item.file).subscribe({
+            next: (res: any) => {
                 this.isLoading = false;
-                this.reviewQueue.updateCurrentItem({
-                    status: 'pending', // Back to pending (user hasn't acted yet)
-                    prediction: res
-                });
-                // The subscription will pick this up and call loadImage
+                res.detections = res.detections.map((d: any) => ({
+                    ...d,
+                    class: this.normalizeClassName(d.class),
+                    ignore: false
+                }));
+                this.prediction = res;
+                this.loadImage(res.url);
             },
-            error: (err) => {
-                console.error("Prediction Error Details:", err);
+            error: () => {
                 this.isLoading = false;
-                this.reviewQueue.updateCurrentItem({
-                    status: 'error',
-                    error: err.error?.detail || err.message || 'Prediction failed'
-                });
-                this.showToast('Prediction failed');
+                this.showToast('Inference Error');
+                this.reviewQueue.updateCurrentItem({ error: 'System error. Please skip or retry.' });
             }
         });
     }
 
-    // Wait for view init to draw on canvas if it wasn't ready
-    ngAfterViewInit() {
-        if (this.image.complete && this.prediction) {
-            this.draw();
-        }
+    private normalizeClassName(cls: string): string {
+        const lower = cls.toLowerCase();
+        if (lower === 'dandelion') return 'Dandelion';
+        if (lower === 'hydrangea') return 'Hydrangea';
+        return cls;
     }
 
-    loadImage(url: string) {
-        const fullUrl = url.startsWith('http') ? url : `http://localhost:8000${url}`;
-        this.image.src = fullUrl;
-
-        this.image.onload = () => {
-            // giving a slight delay for canvas binding in case of layout shifts
-            setTimeout(() => this.draw(), 50);
-        };
-
-        this.image.onerror = (err) => {
-            console.error('Failed to load image:', fullUrl, err);
-            this.showToast('Error loading image. See console.');
-        };
-    }
-
-    // ...
-
-    markAll(correct: boolean) {
-        if (!this.prediction) return;
-        this.prediction.detections.forEach((d: any) => d.ignore = !correct);
-        this.redraw();
-    }
-
-    toggleIgnore(det: any) {
-        det.ignore = !det.ignore;
-        this.redraw();
+    private loadImage(url: string) {
+        this.image.crossOrigin = "anonymous";
+        let fullUrl = url.startsWith('/') ? `http://localhost:8000${url}` : url;
+        this.image.src = fullUrl + (fullUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+        this.image.onload = () => this.redraw();
+        if (this.image.complete && this.image.width > 0) this.redraw();
     }
 
     redraw() {
-        this.draw();
-    }
-
-    draw() {
-        if (!this.canvasRef) return;
-        const canvas = this.canvasRef.nativeElement;
-        const ctx = canvas.getContext('2d');
+        if (!this.canvas || !this.image.width) return;
+        const ctx = this.canvas.nativeElement.getContext('2d');
         if (!ctx) return;
 
-        // Set canvas to image size
-        canvas.width = this.image.width;
-        canvas.height = this.image.height;
+        const canvas = this.canvas.nativeElement;
 
+        if (canvas.width !== this.image.width || canvas.height !== this.image.height) {
+            canvas.width = this.image.width;
+            canvas.height = this.image.height;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(this.image, 0, 0);
 
-        if (this.prediction?.detections) {
-            for (let i = 0; i < this.prediction.detections.length; i++) {
-                const det = this.prediction.detections[i] as any;
-
-                if (det.ignore) continue;
+        if (this.prediction) {
+            this.prediction.detections.forEach((det: any, i: number) => {
+                if (det.ignore) return;
 
                 const [x1, y1, x2, y2] = det.box;
+                const cls = det.class.toLowerCase();
+                const color = cls === 'dandelion' ? '#f59e0b' : '#3b82f6';
 
-                // Color based on class? For now nice Green.
-                const isHydrangea = det.class.toLowerCase().includes('hydrangea');
-                const color = isHydrangea ? '#3b82f6' : '#eab308'; // Blue vs Yellow
-
-                // Box
                 ctx.strokeStyle = color;
-                ctx.lineWidth = Math.max(3, this.image.width * 0.003);
+                ctx.lineWidth = Math.max(4, this.image.width * 0.005);
                 ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
 
-                // Label
                 const fontSize = Math.max(16, this.image.width * 0.02);
                 ctx.font = `bold ${fontSize}px Inter, sans-serif`;
                 const text = `${i + 1}. ${det.class}`;
@@ -185,78 +151,133 @@ export class ReviewComponent implements OnInit {
 
                 ctx.fillStyle = '#ffffff';
                 ctx.fillText(text, x1 + pad, y1 - pad * 0.5);
-            }
+            });
         }
+    }
+
+    toggleIgnore(det: any) {
+        det.ignore = !det.ignore;
+        this.redraw();
     }
 
     @HostListener('window:keydown', ['$event'])
     handleKeyboardEvent(event: KeyboardEvent) {
-        if (event.key === 'ArrowLeft') {
+        const key = event.key.toLowerCase();
+        const num = parseInt(key);
+        if (!isNaN(num) && num > 0 && this.prediction?.detections && num <= this.prediction.detections.length) {
+            this.highlightedIndex = num - 1;
+            this.toggleIgnore(this.prediction.detections[num - 1]);
+            if (this.highlightTimeout) clearTimeout(this.highlightTimeout);
+            this.highlightTimeout = setTimeout(() => this.highlightedIndex = null, 800);
+            return;
+        }
+
+        if (key === 'arrowleft' || (event.shiftKey && key === 'n') || key === 'backspace') {
             this.reject();
-        } else if (event.key === 'ArrowRight') {
+        } else if (key === 'arrowright' || (event.shiftKey && key === 'y') || key === 'enter') {
             this.accept();
+        } else if (key === 'c' && this.prediction) {
+            this.markAll(true);
+        } else if (key === 'm' || key === 'escape') {
+            this.goBack();
         }
     }
 
     accept() {
-        if (!this.current || !this.prediction) return;
-
-        // Filter out ignored detections
-        const validDetections = this.prediction.detections.filter((d: any) => !d.ignore);
-
-        this.showToast('Saving & Training...');
-        this.reviewQueue.updateCurrentItem({ status: 'accepted' });
-
-        this.api.saveAnnotation(
-            this.prediction.filename,
-            validDetections,
-            this.image.width,
-            this.image.height
-        ).pipe(
-            switchMap(() => this.api.triggerTraining())
-        ).subscribe({
-            next: () => {
-                this.showToast('Saved & Training Triggered!');
-                setTimeout(() => this.handleNext(), 1000);
-            },
-            error: (err) => {
-                console.error("Save failed", err);
-                this.showToast('Error saving annotation');
-                setTimeout(() => this.handleNext(), 2000);
+        if (this.isLoading) return;
+        
+        try {
+            if (!this.prediction) {
+                console.warn("[Review] Prediction missing, forcing dashboard return.");
+                this.router.navigate(['/upload']);
+                return;
             }
-        });
-    }
 
-    reject() {
-        if (!this.current) return;
-        this.showToast('Rejected.');
-        this.reviewQueue.updateCurrentItem({ status: 'rejected' });
-        this.handleNext();
-    }
+            this.isLoading = true;
+            this.showToast('Saving & Refining...');
 
-    handleNext() {
-        if (this.queueStats.current < this.queueStats.total) {
-            this.reviewQueue.next();
-        } else {
-            // End of queue
-            this.showToast('All images reviewed!');
-            setTimeout(() => this.goBack(), 1000);
+            const filename = (this.prediction as any).filename || 'unknown.jpg';
+            const validDetections = this.prediction.detections.filter((d: any) => !d.ignore);
+            
+            // Mark as done in the queue
+            if (this.current) {
+                this.reviewQueue.updateCurrentItem({ status: 'accepted' });
+            }
+
+            // Fire background tasks
+            const w = this.image.width || 0;
+            const h = this.image.height || 0;
+            
+            this.api.saveAnnotation(filename, validDetections, w, h).subscribe({
+               next: () => console.log("[Review] Background save complete."),
+               error: (e) => console.error("[Review] Background save failed", e)
+            });
+            this.api.triggerTraining().subscribe();
+
+            // Force Exit Logic
+            const stats = this.queueStats;
+            console.log(`[Review] Queue state: ${stats.current}/${stats.total}`);
+
+            if (stats.current >= stats.total) {
+                console.log("[Review] All images done. Returning home.");
+                this.toast.show("Model Refinement Initiated!", "success");
+                
+                // Final Redirection Impulse
+                this.router.navigate(['/upload']).then(success => {
+                    if (!success) window.location.href = '/upload';
+                });
+            } else {
+                this.isLoading = false;
+                this.showToast('Project refined. Next image...');
+                this.reviewQueue.next();
+            }
+
+        } catch (error) {
+            console.error("[Review] Critical crash during accept, forcing exit:", error);
+            this.isLoading = false;
+            this.router.navigate(['/upload']);
         }
     }
 
-    goPrevious() {
-        this.reviewQueue.previous();
+    reject() {
+        if (!this.current || this.isLoading) return;
+        this.reviewQueue.updateCurrentItem({ status: 'rejected' });
+        const stats = this.queueStats;
+        if (stats.current >= stats.total) {
+            this.router.navigate(['/upload']);
+        } else {
+            this.reviewQueue.next();
+        }
+    }
+
+    markAll(correct: boolean) {
+        if (this.prediction && !this.isLoading) {
+            this.prediction.detections.forEach((d: any) => d.ignore = !correct);
+            this.redraw();
+            if (correct) {
+                this.accept();
+            } else {
+                this.showToast("All items ignored.");
+            }
+        }
+    }
+
+    handleNext() {
+        const stats = this.queueStats;
+        if (stats.current < stats.total) {
+            this.reviewQueue.next();
+        } else {
+            this.router.navigate(['/upload']);
+        }
     }
 
     goBack() {
-        this.reviewQueue.clear();
-        this.router.navigate(['/']);
+        this.router.navigate(['/upload']);
     }
 
-    showToast(msg: string) {
+    private showToast(msg: string) {
         this.toastMessage = msg;
-        setTimeout(() => {
-            if (this.toastMessage === msg) this.toastMessage = null;
-        }, 3000);
+        if (this.toastTimeout) clearTimeout(this.toastTimeout);
+        this.toastTimeout = setTimeout(() => this.toastMessage = null, 3000);
     }
 }

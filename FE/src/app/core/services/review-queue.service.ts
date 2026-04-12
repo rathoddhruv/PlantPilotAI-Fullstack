@@ -18,9 +18,24 @@ export class ReviewQueueService {
     private currentIndex = -1;
 
     public currentItem$ = new BehaviorSubject<ReviewItem | null>(null);
+    public current$ = this.currentItem$; // Alias for compatibility
     public queueStats$ = new BehaviorSubject<{ current: number, total: number }>({ current: 0, total: 0 });
 
     constructor() { }
+
+    getStats() {
+        return this.queueStats$.value;
+    }
+
+    setFiles(files: File[]) {
+        this.queue = Array.from(files).map(f => ({
+            id: Math.random().toString(36).substring(7),
+            file: f,
+            status: 'pending'
+        }));
+        this.currentIndex = 0;
+        this.emitState();
+    }
 
     addFiles(files: File[]) {
         const newItems: ReviewItem[] = Array.from(files).map(f => ({
@@ -32,10 +47,8 @@ export class ReviewQueueService {
 
         if (this.currentIndex === -1 && this.queue.length > 0) {
             this.currentIndex = 0;
-            this.emitState();
-        } else {
-            this.emitState();
         }
+        this.emitState();
     }
 
     clear() {

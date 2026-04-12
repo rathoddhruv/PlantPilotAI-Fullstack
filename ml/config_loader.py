@@ -27,7 +27,7 @@ DEFAULT_MODEL = get_path("DEFAULT_MODEL", "runs/detect/train/weights/best.pt")
 MODEL_PATH = get_path("MODEL_PATH", "runs/detect/train/weights/best.pt")  # universal
 
 # === INPUT + REVIEW PATHS ===
-TEST_IMAGE_FOLDER = get_path("TEST_IMAGE_FOLDER", "C:/Data/Projects/test-1")
+TEST_IMAGE_FOLDER = get_path("TEST_IMAGE_FOLDER", "data/test_images")
 CLASS_FILE = get_path("CLASS_FILE", "class_names.txt")
 ORIGINAL_IMAGES = get_path("ORIGINAL_IMAGES", "data/yolo_dataset/images/train")
 ORIGINAL_LABELS = get_path("ORIGINAL_LABELS", "data/yolo_dataset/labels/train")
