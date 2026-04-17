@@ -4,7 +4,7 @@
   <!-- Persistent Left Sidebar -->
   <aside class="flex-shrink-0 z-30 h-full border-r border-slate-800 bg-[#1e293b] shadow-2xl relative"
          [style.width.px]="sidebarWidth">
-    <app-training-sidebar></app-training-sidebar>
+    <app-dashboard-sidebar [runs]="runs" [manifest]="manifest"></app-dashboard-sidebar>
 
     <!-- Sidebar Resize Handle -->
     <div class="absolute top-0 -right-1 w-2 h-full cursor-col-resize hover:bg-indigo-500/50 transition-colors z-40"

@@ -1,13 +1,5 @@
 <div class="h-full w-full flex bg-[#0f172a] text-slate-100 overflow-hidden font-sans relative">
     
-    <!-- Sidebar (Status & History) -->
-    <app-dashboard-sidebar 
-        [runs]="runs" 
-        [manifest]="manifest"
-        class="h-full border-r border-slate-800/60 z-20"
-        [style.width.px]="sidebarWidth">
-    </app-dashboard-sidebar>
-
     <!-- Main Workspace -->
     <div class="flex-1 relative z-10 flex flex-col items-center justify-center p-6 overflow-y-auto"
         (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">

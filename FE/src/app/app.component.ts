@@ -1,18 +1,20 @@
-import { Component, HostListener } from '@angular/core';
+import { Component, HostListener, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
-import { TrainingSidebarComponent } from './features/review/sidebar/training-sidebar.component';
+import { DashboardSidebarComponent } from './features/upload/sidebar/dashboard-sidebar.component';
 import { ToastComponent } from './shared/components/toast/toast.component';
 import { LogPanelComponent } from './shared/log-panel/log-panel.component';
+import { ApiService, RunInfo } from './core/services/api.service';
+import { interval, startWith, switchMap } from 'rxjs';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, TrainingSidebarComponent, ToastComponent, LogPanelComponent],
+  imports: [CommonModule, RouterOutlet, DashboardSidebarComponent, ToastComponent, LogPanelComponent],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss']
 })
-export class AppComponent {
+export class AppComponent implements OnInit {
   title = 'plant-pilot';
   isConsoleVisible = false;
 
@@ -21,6 +23,25 @@ export class AppComponent {
   consoleHeight = 300;
   isResizingSidebar = false;
   isResizingConsole = false;
+
+  // Data State
+  runs: RunInfo[] = [];
+  manifest: any[] = [];
+
+  constructor(private api: ApiService) { }
+
+  ngOnInit() {
+    // Global data polling for sidebar
+    interval(5000).pipe(
+      startWith(0),
+      switchMap(() => this.api.getRuns())
+    ).subscribe({
+      next: (res) => {
+        this.runs = res.runs;
+        this.manifest = res.manifest;
+      }
+    });
+  }
 
   toggleConsole() {
     this.isConsoleVisible = !this.isConsoleVisible;
@@ -40,7 +61,6 @@ export class AppComponent {
   @HostListener('document:mousemove', ['$event'])
   onMouseMove(event: MouseEvent) {
     if (this.isResizingSidebar) {
-      // Sidebar width is relative to left side
       const newWidth = event.clientX;
       if (newWidth > 200 && newWidth < 600) {
         this.sidebarWidth = newWidth;
@@ -48,7 +68,6 @@ export class AppComponent {
     }
 
     if (this.isResizingConsole) {
-      // Console height is relative to bottom
       const newHeight = window.innerHeight - event.clientY;
       if (newHeight > 40 && newHeight < 800) {
         this.consoleHeight = newHeight;
