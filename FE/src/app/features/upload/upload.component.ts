@@ -63,8 +63,13 @@ export class UploadComponent implements OnInit, OnDestroy {
     isResizingSidebar = false;
     isResizingConsole = false;
 
+    // Modal State
+    showImportModal = false;
+    showMaintenanceModal = false;
+    pendingZipFile: File | null = null;
+
     constructor(
-        private api: ApiService,
+        public api: ApiService,
         private router: Router,
         public reviewQueue: ReviewQueueService
     ) { }
@@ -229,7 +234,8 @@ export class UploadComponent implements OnInit, OnDestroy {
                     return;
                 }
                 this.addLog("ZIP file dropped: " + zipFile.name);
-                this.startZipFlow(zipFile);
+                this.pendingZipFile = zipFile;
+                this.showImportModal = true;
                 return;
             }
 
@@ -430,23 +436,34 @@ export class UploadComponent implements OnInit, OnDestroy {
     }
 
     openProjectReset() {
-        if (confirm('RESET PROJECT: This will ARCHIVE your current dataset and runs, allowing you to start fresh while keeping backups. Proceed?')) {
-            this.status = 'initializing';
-            this.statusTitle = 'Archiving Project';
-            this.statusMessage = 'Moving files to archive...';
-            this.api.resetProject(true).subscribe({
-                next: () => {
-                    this.status = 'idle';
-                    this.addLog("Project successfully archived. Environment is clean.");
-                    this.datasetImages = '0';
-                    this.datasetClasses = '0';
-                    this.runCount = 0;
-                },
-                error: (err) => {
-                    this.status = 'idle';
-                    this.error = "Archive failed: " + (err.error?.detail || err.message);
-                }
-            });
-        }
+        this.showMaintenanceModal = true;
+    }
+
+    archiveProject() {
+        this.api.resetProject(true).subscribe({
+            next: () => {
+                alert('Project archived. Workspace is clean.');
+                window.location.reload();
+            },
+            error: (e) => alert('Archive failed: ' + e.message)
+        });
+    }
+
+    wipeProject() {
+        if (!confirm('PERMANENT WIPE: This will delete everything. Are you sure?')) return;
+        this.api.resetProject(false).subscribe({
+            next: () => {
+                alert('Environment wiped.');
+                window.location.reload();
+            },
+            error: (e) => alert('Wipe failed: ' + e.message)
+        });
+    }
+
+    confirmImport(isFresh: boolean) {
+        if (!this.pendingZipFile) return;
+        this.isFreshStart = isFresh;
+        this.showImportModal = false;
+        this.startZipFlow(this.pendingZipFile);
     }
 }

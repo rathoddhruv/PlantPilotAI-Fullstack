@@ -2,8 +2,13 @@
   <app-toast></app-toast>
 
   <!-- Persistent Left Sidebar -->
-  <aside class="w-80 flex-shrink-0 z-30 h-full border-r border-slate-800 bg-[#1e293b] shadow-2xl relative">
+  <aside class="flex-shrink-0 z-30 h-full border-r border-slate-800 bg-[#1e293b] shadow-2xl relative"
+         [style.width.px]="sidebarWidth">
     <app-training-sidebar></app-training-sidebar>
+
+    <!-- Sidebar Resize Handle -->
+    <div class="absolute top-0 -right-1 w-2 h-full cursor-col-resize hover:bg-indigo-500/50 transition-colors z-40"
+         (mousedown)="startResizingSidebar($event)"></div>
   </aside>
 
   <!-- Main Content Area -->
@@ -13,29 +18,33 @@
     </div>
 
     <!-- Global Console Interface -->
-    <div class="bg-[#020617] border-t border-slate-800 relative z-20 transition-all duration-300"
-      [style.height]="isConsoleVisible ? '300px' : '40px'">
+    <div class="bg-[#020617] border-t border-slate-800 relative z-20 transition-all duration-[20ms]"
+         [style.height.px]="isConsoleVisible ? consoleHeight : 40">
+      
+      <!-- Console Resize Handle (Top Edge) -->
+      <div *ngIf="isConsoleVisible"
+           class="absolute -top-1 left-0 w-full h-2 cursor-row-resize hover:bg-indigo-500/50 transition-colors z-40"
+           (mousedown)="startResizingConsole($event)"></div>
 
       <!-- Console Header / Toggle Bar -->
-      <div
-        class="flex items-center justify-between px-6 h-10 border-b border-slate-800/50 cursor-pointer hover:bg-slate-900/40"
-        (click)="toggleConsole()">
+      <div class="flex items-center justify-between px-6 h-10 border-b border-slate-800/50 cursor-pointer hover:bg-slate-900/40"
+           (click)="toggleConsole()">
         <div class="flex items-center gap-3">
           <span class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">System Terminal</span>
           <span *ngIf="!isConsoleVisible"
-            class="text-[10px] text-emerald-500 font-bold animate-pulse uppercase tracking-widest">● Monitoring
-            active</span>
+                class="text-[10px] text-emerald-500 font-bold animate-pulse uppercase tracking-widest">● Monitoring active</span>
         </div>
         <button class="text-slate-500 hover:text-white transition-colors">
-          <svg class="w-4 h-4 transition-transform duration-300" [class.rotate-180]="!isConsoleVisible" fill="none"
-            stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 transition-transform duration-300" 
+               [class.rotate-180]="!isConsoleVisible" fill="none"
+               stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
           </svg>
         </button>
       </div>
 
-      <!-- Log Panel Content (Only visible if isConsoleVisible) -->
-      <div *ngIf="isConsoleVisible" class="h-[260px]">
+      <!-- Log Panel Content -->
+      <div *ngIf="isConsoleVisible" class="overflow-hidden" [style.height.px]="consoleHeight - 40">
         <app-log-panel></app-log-panel>
       </div>
     </div>

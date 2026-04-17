@@ -16,7 +16,6 @@ import { Router } from '@angular/router';
 })
 export class ReviewComponent implements OnInit, OnDestroy {
     @ViewChild('canvas') canvas!: ElementRef<HTMLCanvasElement>;
-    // Redraw trigger comment
 
     current: ReviewItem | null = null;
     prediction: PredictionResult | null = null;
@@ -32,6 +31,10 @@ export class ReviewComponent implements OnInit, OnDestroy {
 
     classOptions = ['Dandelion', 'Hydrangea'];
     classNames = ['Dandelion', 'Hydrangea'];
+
+    // Splitter State
+    sidebarWidth = 320;
+    isResizingSidebar = false;
 
     constructor(
         private api: ApiService,
@@ -64,6 +67,29 @@ export class ReviewComponent implements OnInit, OnDestroy {
         if (this.sub) this.sub.unsubscribe();
         if (this.toastTimeout) clearTimeout(this.toastTimeout);
         if (this.highlightTimeout) clearTimeout(this.highlightTimeout);
+    }
+
+    // --- Splitter Logic ---
+    startResizingSidebar(event: MouseEvent) {
+        event.preventDefault();
+        this.isResizingSidebar = true;
+    }
+
+    @HostListener('document:mousemove', ['$event'])
+    onMouseMove(event: MouseEvent) {
+        if (this.isResizingSidebar) {
+            const containerWidth = window.innerWidth;
+            const newWidth = containerWidth - event.clientX;
+            if (newWidth > 200 && newWidth < 600) {
+                this.sidebarWidth = newWidth;
+                setTimeout(() => this.redraw()); // Force redraw of canvas if layout shifts
+            }
+        }
+    }
+
+    @HostListener('document:mouseup')
+    onMouseUp() {
+        this.isResizingSidebar = false;
     }
 
     get queueStats() {
@@ -155,26 +181,14 @@ export class ReviewComponent implements OnInit, OnDestroy {
         }
     }
 
-    toggleIgnore(det: any) {
-        det.ignore = !det.ignore;
-        this.redraw();
-    }
-
+    // Keyboard and flow logic follows...
     @HostListener('window:keydown', ['$event'])
     handleKeyboardEvent(event: KeyboardEvent) {
         if (this.isLoading) return;
-
         const key = event.key.toLowerCase();
         
-        // 1-9 for Class Assignment or Toggling
         const num = parseInt(key);
         if (!isNaN(num) && num > 0) {
-            // If user is hovering over a detection or we have a single detection, change class?
-            // Existing logic: toggles ignore.
-            // New logic: If there are classes, maybe shift+number changes class?
-            // Actually, let's keep it simple: 1-9 toggles ignore for detection #N
-            // And maybe Q, W, E for class assignment of the "highlighted" one?
-            
             if (this.prediction?.detections && num <= this.prediction.detections.length) {
                 this.highlightedIndex = num - 1;
                 this.toggleIgnore(this.prediction.detections[num - 1]);
@@ -184,7 +198,6 @@ export class ReviewComponent implements OnInit, OnDestroy {
             }
         }
 
-        // Navigation & Batch
         if (key === 'arrowleft' || key === 'a' || key === 'backspace') {
             this.reject();
         } else if (key === 'arrowright' || key === 'd' || key === 'enter') {
@@ -200,62 +213,31 @@ export class ReviewComponent implements OnInit, OnDestroy {
 
     accept() {
         if (this.isLoading) return;
-        
         try {
             if (!this.prediction) {
-                console.warn("[Review] Prediction missing, forcing dashboard return.");
                 this.router.navigate(['/upload']);
                 return;
             }
-
             this.isLoading = true;
             this.showToast('Saving & Refining...');
-
             const filename = (this.prediction as any).filename || 'unknown.jpg';
             const validDetections = this.prediction.detections.filter((d: any) => !d.ignore);
-            
-            // Mark as done in the queue
             if (this.current) {
                 this.reviewQueue.updateCurrentItem({ status: 'accepted' });
             }
-
-            // Fire background tasks
             const w = this.image.width || 0;
             const h = this.image.height || 0;
+            this.api.saveAnnotation(filename, validDetections, w, h).subscribe();
             
-            this.api.saveAnnotation(filename, validDetections, w, h).subscribe({
-               next: () => console.log("[Review] Background save complete."),
-               error: (e) => console.error("[Review] Background save failed", e)
-            });
-            this.api.saveAnnotation(filename, validDetections, w, h).subscribe({
-               next: () => console.log("[Review] Background save complete."),
-               error: (e) => console.error("[Review] Background save failed", e)
-            });
-            // REMOVED triggerTraining here to prevent parallel hanging
-
-            // Force Exit Logic
             const stats = this.queueStats;
-            console.log(`[Review] Queue state: ${stats.current}/${stats.total}`);
-
             if (stats.current >= stats.total) {
-                console.log("[Review] All images done. Triggering Batch Training.");
-                this.toast.show("Queue Finished. Initializing Batch Refinement...", "success");
-                
-                // Batch Training Trigger (Once per queue)
                 this.api.triggerTraining().subscribe();
-
-                // Final Redirection Impulse
-                this.router.navigate(['/upload']).then(success => {
-                    if (!success) window.location.href = '/upload';
-                });
+                this.router.navigate(['/upload']);
             } else {
                 this.isLoading = false;
-                this.showToast('Input saved. Loading next...');
                 this.reviewQueue.next();
             }
-
         } catch (error) {
-            console.error("[Review] Critical crash during accept, forcing exit:", error);
             this.isLoading = false;
             this.router.navigate(['/upload']);
         }
@@ -276,26 +258,16 @@ export class ReviewComponent implements OnInit, OnDestroy {
         if (this.prediction && !this.isLoading) {
             this.prediction.detections.forEach((d: any) => d.ignore = !correct);
             this.redraw();
-            if (correct) {
-                this.accept();
-            } else {
-                this.showToast("All items ignored.");
-            }
+            if (correct) this.accept();
         }
     }
 
-    handleNext() {
-        const stats = this.queueStats;
-        if (stats.current < stats.total) {
-            this.reviewQueue.next();
-        } else {
-            this.router.navigate(['/upload']);
-        }
+    toggleIgnore(det: any) {
+        det.ignore = !det.ignore;
+        this.redraw();
     }
 
-    goBack() {
-        this.router.navigate(['/upload']);
-    }
+    goBack() { this.router.navigate(['/upload']); }
 
     private showToast(msg: string) {
         this.toastMessage = msg;
