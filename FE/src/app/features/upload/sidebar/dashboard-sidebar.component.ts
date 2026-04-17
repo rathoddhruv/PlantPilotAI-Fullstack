@@ -9,8 +9,8 @@ import { ApiService, RunInfo } from '../../../core/services/api.service';
   template: `
     <div class="w-full bg-gray-900 border-r border-gray-800 p-6 flex flex-col h-full text-gray-300">
       <div class="mb-8">
-        <h2 class="text-xl font-bold text-white mb-1 uppercase tracking-tighter italic">Neural Control</h2>
-        <p class="text-[10px] text-gray-500 font-mono font-bold uppercase tracking-widest">System & Network Hub</p>
+        <h2 class="text-xl font-black text-white mb-1 uppercase tracking-tighter italic whitespace-nowrap">TrainFlow Vision</h2>
+        <p class="text-[10px] text-gray-500 font-mono font-bold uppercase tracking-widest">Global Training & Refine Hub</p>
       </div>
 
       <div class="mb-8 bg-gray-800/40 rounded-2xl p-4 border border-gray-700/50">

@@ -15,7 +15,7 @@ import { interval, startWith, switchMap } from 'rxjs';
   styleUrls: ['./app.component.scss']
 })
 export class AppComponent implements OnInit {
-  title = 'plant-pilot';
+  title = 'trainflow-vision';
   isConsoleVisible = false;
 
   // Splitter State

@@ -37,12 +37,25 @@
             <div class="w-full h-full relative flex items-center justify-center overflow-hidden">
                 <canvas #canvas class="block max-h-full max-w-full object-contain rounded shadow-2xl"></canvas>
 
-                <!-- Compact Floating HUD -->
-                <div class="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-slate-700 flex items-center gap-6 pointer-events-none shadow-2xl">
-                    <div class="flex items-center gap-2"><kbd class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[9px]">A</kbd><span class="text-[9px] text-slate-400 font-bold uppercase">Reject</span></div>
-                    <div class="flex items-center gap-2"><kbd class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[9px]">D</kbd><span class="text-[9px] text-slate-400 font-bold uppercase">Accept</span></div>
-                    <div class="h-3 w-[1px] bg-slate-700"></div>
-                    <div class="flex items-center gap-2"><kbd class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[9px]">C</kbd><span class="text-[9px] text-slate-400 font-bold uppercase">All Yes</span></div>
+                <!-- Ultra-High Visibility Floating HUD -->
+                <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl px-8 py-3 rounded-2xl border-2 border-indigo-500/30 flex items-center gap-10 shadow-[0_20px_50px_rgba(0,0,0,0.6)] z-50 animate-fade-in-up">
+                    <div class="flex items-center gap-3">
+                        <kbd class="bg-indigo-600 text-white px-2.5 py-1 rounded text-[10px] font-black shadow-lg">A</kbd>
+                        <span class="text-[10px] text-indigo-200 font-black uppercase tracking-widest">Reject</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <kbd class="bg-emerald-600 text-white px-2.5 py-1 rounded text-[10px] font-black shadow-lg">D</kbd>
+                        <span class="text-[10px] text-emerald-200 font-black uppercase tracking-widest">Accept</span>
+                    </div>
+                    <div class="w-[2px] h-4 bg-slate-700 mx-2"></div>
+                    <div class="flex items-center gap-3">
+                        <kbd class="bg-slate-700 text-white px-2.5 py-1 rounded text-[10px] font-black shadow-lg">C</kbd>
+                        <span class="text-[10px] text-slate-400 font-black uppercase tracking-widest">All Yes</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <kbd class="bg-slate-700 text-white px-2.5 py-1 rounded text-[10px] font-black shadow-lg">1-9</kbd>
+                        <span class="text-[10px] text-slate-400 font-black uppercase tracking-widest">Toggle</span>
+                    </div>
                 </div>
             </div>
         </div>
