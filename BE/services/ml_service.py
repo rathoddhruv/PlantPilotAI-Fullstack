@@ -149,11 +149,15 @@ class MLService:
                 self.log_message(line)
                 
         process.wait()
-        
         if process.returncode != 0:
+            # Special check for STATUS_CONTROL_C_EXIT (0xC000013A) which is 3221225794 or -1073741510
+            if process.returncode in [3221225794, -1073741510]:
+                self.log_message("⚠️ Training was interrupted (Process terminated by system/reload).")
+                return "Interrupted"
+            
             self.log_message(f"Training failed with code {process.returncode}")
-            raise RuntimeError(f"Training failed")
-
+            return f"Error: Code {process.returncode}"
+            
         self.log_message("Training completed successfully.")
         self.log_message("Reloading model...")
         self.load_model()

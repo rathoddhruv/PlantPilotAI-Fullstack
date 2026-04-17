@@ -17,7 +17,7 @@ def run_dev():
     # Start Backend
     print("Starting FastAPI Backend (Port 8000)...")
     be_process = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "BE.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"],
+        [sys.executable, "-m", "uvicorn", "BE.main:app", "--reload", "--reload-exclude", "ML/*", "--host", "0.0.0.0", "--port", "8000"],
         cwd=ROOT_DIR
     )
 
