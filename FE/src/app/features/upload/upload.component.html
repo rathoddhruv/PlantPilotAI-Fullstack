@@ -1,25 +1,31 @@
-<div class="h-full w-full flex flex-col bg-[#0f172a] text-slate-100 overflow-hidden font-sans relative">
-    <!-- Background Decor -->
-    <div class="absolute inset-0 z-0 pointer-events-none">
-        <div class="absolute top-0 left-0 w-1/2 h-1/2 bg-indigo-500/10 rounded-full blur-[120px]"></div>
-        <div class="absolute bottom-0 right-0 w-1/2 h-1/2 bg-emerald-500/10 rounded-full blur-[120px]"></div>
-    </div>
+<div class="h-full w-full flex bg-[#0f172a] text-slate-100 overflow-hidden font-sans relative">
+    
+    <!-- Sidebar (Status & History) -->
+    <app-dashboard-sidebar 
+        [runs]="runs" 
+        [manifest]="manifest"
+        class="h-full border-r border-slate-800/60 z-20"
+        [style.width.px]="sidebarWidth">
+    </app-dashboard-sidebar>
 
+    <!-- Main Workspace -->
     <div class="flex-1 relative z-10 flex flex-col items-center justify-center p-6 overflow-y-auto"
         (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+        
+        <!-- Background Decor -->
+        <div class="absolute inset-0 z-0 pointer-events-none">
+            <div class="absolute top-0 left-0 w-1/2 h-1/2 bg-indigo-500/10 rounded-full blur-[120px]"></div>
+            <div class="absolute bottom-0 right-0 w-1/2 h-1/2 bg-emerald-500/10 rounded-full blur-[120px]"></div>
+        </div>
 
         <!-- Main Workspace Card -->
-        <div class="w-full max-w-4xl bg-slate-800/40 backdrop-blur-2xl border border-slate-700/50 rounded-3xl p-10 shadow-2xl transition-all"
+        <div class="w-full max-w-4xl bg-slate-800/40 backdrop-blur-2xl border border-slate-700/50 rounded-3xl p-10 shadow-2xl transition-all relative z-10"
             [ngClass]="isDragOver ? 'border-indigo-500 bg-slate-800/60' : ''">
 
             <!-- Logo & Header -->
             <div class="text-center mb-10">
-                <div
-                    class="text-5xl mb-4 transform hover:scale-110 transition-transform duration-500 cursor-default inline-block">
-                    🌿</div>
-                <h1
-                    class="text-4xl font-black tracking-tight bg-gradient-to-r from-indigo-400 via-white to-emerald-400 bg-clip-text text-transparent mb-3">
-                    PlantPilotAI</h1>
+                <div class="text-5xl mb-4 transform hover:scale-110 transition-transform duration-500 cursor-default inline-block">🌿</div>
+                <h1 class="text-4xl font-black tracking-tight bg-gradient-to-r from-indigo-400 via-white to-emerald-400 bg-clip-text text-transparent mb-3">PlantPilotAI</h1>
                 <div class="flex items-center justify-center gap-3">
                     <div class="px-4 py-1 rounded-full bg-slate-900/60 border border-slate-700 flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -47,19 +53,17 @@
                     <button (click)="setMode('train')"
                         class="px-6 py-2.5 rounded-xl text-xs font-black tracking-tight transition-all flex items-center gap-2"
                         [ngClass]="appMode === 'train' ? 'bg-slate-800 text-indigo-400 shadow-bold' : 'text-slate-500'">
-                        <span class="w-1.5 h-1.5 rounded-full"
-                            [ngClass]="appMode === 'train' ? 'bg-indigo-500' : 'bg-slate-700'"></span> ACTIVE TRAINING
+                        <span class="w-1.5 h-1.5 rounded-full" [ngClass]="appMode === 'train' ? 'bg-indigo-500' : 'bg-slate-700'"></span> ACTIVE TRAINING
                     </button>
                     <button (click)="setMode('test')"
                         class="px-6 py-2.5 rounded-xl text-xs font-black tracking-tight transition-all flex items-center gap-2"
                         [ngClass]="appMode === 'test' ? 'bg-slate-800 text-indigo-400 shadow-bold' : 'text-slate-500'">
-                        <span class="w-1.5 h-1.5 rounded-full"
-                            [ngClass]="appMode === 'test' ? 'bg-indigo-500' : 'bg-slate-700'"></span> TEST MODEL
+                        <span class="w-1.5 h-1.5 rounded-full" [ngClass]="appMode === 'test' ? 'bg-indigo-500' : 'bg-slate-700'"></span> TEST MODEL
                     </button>
                 </div>
             </div>
 
-            <!-- Status -->
+            <!-- Status (Process Updates Only) -->
             <div *ngIf="status !== 'idle'"
                 class="mb-10 animate-fade-in text-center p-8 bg-slate-900/40 rounded-3xl border border-slate-700">
                 <div class="relative h-1.5 bg-slate-800 rounded-full mb-6 overflow-hidden max-w-md mx-auto">
@@ -73,17 +77,13 @@
             <!-- Main Interaction Grid -->
             <div *ngIf="status === 'idle'" class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
                 <!-- Settings -->
-                <div
-                    class="bg-slate-900/40 border border-slate-700/50 p-6 rounded-3xl space-y-6 flex flex-col justify-center">
+                <div class="bg-slate-900/40 border border-slate-700/50 p-6 rounded-3xl space-y-6 flex flex-col justify-center">
                     <div class="space-y-3">
                         <div class="flex justify-between items-center">
-                            <span class="text-[10px] font-bold text-slate-100 uppercase tracking-widest">Confidence
-                                Threshold</span>
-                            <span class="text-xs font-mono font-black text-indigo-400">{{ (testConfidence *
-                                100).toFixed(0) }}%</span>
+                            <span class="text-[10px] font-bold text-slate-100 uppercase tracking-widest">Confidence Threshold</span>
+                            <span class="text-xs font-mono font-black text-indigo-400">{{ (testConfidence * 100).toFixed(0) }}%</span>
                         </div>
-                        <input type="range" min="0.01" max="0.95" step="0.01" [(ngModel)]="testConfidence"
-                            (change)="saveParams()"
+                        <input type="range" min="0.01" max="0.95" step="0.01" [(ngModel)]="testConfidence" (change)="saveParams()"
                             class="w-full accent-indigo-500 h-1 bg-slate-800 rounded-lg cursor-pointer">
                     </div>
 
@@ -99,26 +99,13 @@
                                 class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-center font-bold text-white outline-none">
                         </div>
                         <div class="col-span-2 space-y-1">
-                            <span class="text-[9px] font-bold text-slate-500 uppercase">Starting Architecture</span>
+                            <span class="text-[9px] font-bold text-slate-500 uppercase">Architecture</span>
                             <select [(ngModel)]="trainModel" (change)="saveParams()"
                                 class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-white outline-none">
                                 <option value="best.pt">✨ Resume from Last Best Model</option>
-                                <option value="yolo11n.pt">YOLOv11 Nano (Fastest)</option>
-                                <option value="yolo11s.pt">YOLOv11 Small (Balanced)</option>
+                                <option value="yolo11n.pt">YOLOv11 Nano</option>
                                 <option value="yolov8n.pt">YOLOv8 Nano</option>
-                                <option value="yolov8s.pt">YOLOv8 Small</option>
-                                <option value="yolov10n.pt">YOLOv10 Nano</option>
                             </select>
-                        </div>
-                        <div class="col-span-2 pt-2">
-                            <label class="flex items-center justify-between cursor-pointer">
-                                <span class="text-[10px] font-bold text-slate-300 uppercase italic">Wipe
-                                    Environment?</span>
-                                <input type="checkbox" [(ngModel)]="isFreshStart" class="sr-only peer">
-                                <div
-                                    class="w-10 h-5 bg-slate-900 rounded-full peer peer-checked:bg-red-500 relative transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5 shadow-lg">
-                                </div>
-                            </label>
                         </div>
                     </div>
                 </div>
@@ -126,18 +113,12 @@
                 <!-- Dropzone -->
                 <div (click)="fileInput.click()"
                     class="p-8 border-2 border-dashed border-slate-700 rounded-3xl bg-slate-900/40 hover:bg-slate-800 transition-all group cursor-pointer flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[220px]">
-                    <div
-                        class="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center shadow-xl mb-4 group-hover:scale-105 transition-transform">
-                        <svg *ngIf="appMode === 'train'" class="w-8 h-8 text-indigo-400" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
-                            </path>
+                    <div class="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center shadow-xl mb-4 group-hover:scale-105 transition-transform">
+                        <svg *ngIf="appMode === 'train'" class="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                         </svg>
-                        <svg *ngIf="appMode === 'test'" class="w-8 h-8 text-emerald-400" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        <svg *ngIf="appMode === 'test'" class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
                     </div>
                     <p class="text-sm font-black text-white uppercase tracking-tight">{{ appMode === 'train' ? 'Upload Training Set' : 'Scan Test Image' }}</p>
@@ -149,21 +130,48 @@
                 </div>
             </div>
 
-            <!-- Footer Reset -->
-            <div *ngIf="status === 'idle'"
-                class="mt-12 flex items-center justify-center border-t border-slate-800/40 pt-8">
-                <button (click)="openProjectReset()"
-                    class="group flex items-center gap-2 text-[10px] font-black text-slate-600 hover:text-red-400 transition-all uppercase tracking-widest outline-none">
-                    <span class="opacity-50 group-hover:opacity-100 italic transition-opacity">🔥</span> RESET PROJECT
-                </button>
+            <!-- Footer Actions -->
+            <div *ngIf="status === 'idle'" class="mt-12 flex flex-col items-center justify-center border-t border-slate-800/40 pt-8 gap-6">
+                <!-- Batch Refine Button -->
+                <div *ngIf="unrefinedCount > 0" class="w-full max-w-sm animate-bounce-subtle">
+                    <button (click)="api.triggerTraining().subscribe()"
+                        class="w-full py-4 bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-2xl flex items-center justify-center gap-4 shadow-xl hover:scale-105 transition-all group">
+                        <span class="text-2xl">🔥</span>
+                        <div class="text-left">
+                            <p class="text-xs font-black text-white uppercase tracking-widest leading-none">Batch Refine Model</p>
+                            <p class="text-[9px] text-white/70 font-bold uppercase tracking-widest mt-1">{{ unrefinedCount }} Pending Corrections</p>
+                        </div>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-8">
+                    <div class="flex items-center gap-6 opacity-30 text-[10px] font-mono tracking-tighter uppercase">
+                        <span>AI CORE: V8.4</span>
+                        <span>RUN_ID: 0x{{ runCount }}</span>
+                    </div>
+                </div>
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- Interface Subtitle -->
-        <div class="mt-8 flex items-center gap-6 opacity-30 text-[10px] font-mono tracking-tighter uppercase">
-            <span>AI CORE: V8.4</span>
-            <span>NODE: WIN32_STABLE</span>
-            <span>RUN_ID: 0x{{ runCount }}</span>
+<!-- Strategy Modal Integration -->
+<div *ngIf="showImportModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md">
+    <div class="w-full max-w-2xl bg-slate-900 border border-slate-700/50 rounded-[2.5rem] shadow-3xl overflow-hidden animate-slide-up">
+        <div class="p-10 text-center">
+            <h3 class="text-3xl font-black text-white italic tracking-tighter mb-2 uppercase">Import Strategy</h3>
+            <p class="text-slate-400 text-sm mb-10 font-bold uppercase tracking-widest opacity-60">"{{ pendingZipFile?.name }}"</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <button (click)="confirmImport(false)" class="p-8 bg-slate-800/40 border border-indigo-500/30 rounded-[2rem] text-left hover:bg-slate-800 transition-all">
+                    <p class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-1">🚀 Resume & Evolve</p>
+                    <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Layer new data onto your best model.</p>
+                </button>
+                <button (click)="confirmImport(true)" class="p-8 bg-slate-800/40 border border-red-500/20 rounded-[2rem] text-left hover:bg-slate-800 transition-all">
+                    <p class="text-xs font-black text-red-500 uppercase tracking-widest mb-1">🧼 Fresh Start</p>
+                    <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Perform a Hard Reset before training.</p>
+                </button>
+            </div>
+            <button (click)="showImportModal = false" class="mt-8 text-[10px] font-bold text-slate-600 hover:text-white uppercase tracking-widest transition-colors">Cancel</button>
         </div>
     </div>
 </div>

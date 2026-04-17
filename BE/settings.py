@@ -20,3 +20,4 @@ YOLO_DATASET_LABELS = YOLO_DATASET_ROOT / "labels" / "train"
 YOLO_MERGED_ROOT = (ML_DIR / "data" / "yolo_merged").resolve()
 YOLO_MERGED_IMAGES = YOLO_MERGED_ROOT / "images" / "train"
 YOLO_MERGED_LABELS = YOLO_MERGED_ROOT / "labels" / "train"
+ACTIVE_LABELS_DIR = (ML_DIR / "active_labels").resolve()

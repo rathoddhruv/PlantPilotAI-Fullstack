@@ -38,6 +38,7 @@ export class UploadComponent implements OnInit, OnDestroy {
 
     datasetImages = '-';
     datasetClasses = '-';
+    unrefinedCount = 0;
 
     // Training Settings
     trainEpochs = 40;
@@ -142,6 +143,8 @@ export class UploadComponent implements OnInit, OnDestroy {
                     const lastMeta = [...res.manifest].reverse().find(m => m.nc);
                     if (lastMeta) this.datasetClasses = lastMeta.nc.toString();
                 }
+
+                this.unrefinedCount = res.unrefined_count || 0;
 
                 // 2. Extract Total Image Count
                 if (res.manifest && res.manifest.length > 0) {

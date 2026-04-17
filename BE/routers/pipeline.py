@@ -82,10 +82,16 @@ def pipeline_run(
 @router.get("/runs")
 def get_runs():
     """list all previous runs and manifest info"""
+    from BE.settings import ACTIVE_LABELS_DIR
+    unrefined_count = 0
+    if ACTIVE_LABELS_DIR.exists():
+        unrefined_count = len([f for f in ACTIVE_LABELS_DIR.iterdir() if f.is_file() and f.suffix == '.txt'])
+
     runs = list_runs()
     return {
         "status": "success",
         "count": len(runs),
+        "unrefined_count": unrefined_count,
         "runs": runs,
         "manifest": read_manifest(),
     }

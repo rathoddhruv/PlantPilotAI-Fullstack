@@ -227,23 +227,30 @@ export class ReviewComponent implements OnInit, OnDestroy {
                next: () => console.log("[Review] Background save complete."),
                error: (e) => console.error("[Review] Background save failed", e)
             });
-            this.api.triggerTraining().subscribe();
+            this.api.saveAnnotation(filename, validDetections, w, h).subscribe({
+               next: () => console.log("[Review] Background save complete."),
+               error: (e) => console.error("[Review] Background save failed", e)
+            });
+            // REMOVED triggerTraining here to prevent parallel hanging
 
             // Force Exit Logic
             const stats = this.queueStats;
             console.log(`[Review] Queue state: ${stats.current}/${stats.total}`);
 
             if (stats.current >= stats.total) {
-                console.log("[Review] All images done. Returning home.");
-                this.toast.show("Model Refinement Initiated!", "success");
+                console.log("[Review] All images done. Triggering Batch Training.");
+                this.toast.show("Queue Finished. Initializing Batch Refinement...", "success");
                 
+                // Batch Training Trigger (Once per queue)
+                this.api.triggerTraining().subscribe();
+
                 // Final Redirection Impulse
                 this.router.navigate(['/upload']).then(success => {
                     if (!success) window.location.href = '/upload';
                 });
             } else {
                 this.isLoading = false;
-                this.showToast('Project refined. Next image...');
+                this.showToast('Input saved. Loading next...');
                 this.reviewQueue.next();
             }
 
