@@ -140,9 +140,11 @@
                                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
                     </div>
-                    <p class="text-sm font-black text-white uppercase tracking-tight">{{ appMode === 'train' ? 'Upload
-                        Training Set' : 'Scan Test Image' }}</p>
+                    <p class="text-sm font-black text-white uppercase tracking-tight">{{ appMode === 'train' ? 'Upload Training Set' : 'Scan Test Image' }}</p>
                     <p class="text-[9px] text-slate-500 mt-1 uppercase font-bold tracking-widest">ZIP / JPG / PNG</p>
+                    <div *ngIf="reviewQueue.getStats().total > 0" class="mt-4 px-3 py-1 bg-indigo-500 text-white text-[10px] font-black rounded-full shadow-lg animate-bounce">
+                        {{ reviewQueue.getStats().total }} IMAGES IN QUEUE
+                    </div>
                     <input type="file" multiple #fileInput (change)="onFileSelected($event)" class="hidden">
                 </div>
             </div>

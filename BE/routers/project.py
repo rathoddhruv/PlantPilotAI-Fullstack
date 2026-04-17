@@ -152,7 +152,7 @@ async def inspect_zip(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Failed to inspect ZIP: {str(e)}")
 
 @router.post("/reset")
-def reset_project():
-    """Reset all project data (datasets, runs)."""
-    ml_service.reset_project()
-    return {"status": "success", "message": "Project reset complete."}
+def reset_project(archive: bool = False):
+    """Reset all project data (datasets, runs), optionally archiving."""
+    ml_service.reset_project(archive=archive)
+    return {"status": "success", "message": f"Project {'reset' if not archive else 'archived'} complete."}

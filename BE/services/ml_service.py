@@ -25,17 +25,23 @@ class MLService:
     def get_logs(self):
         return list(self.logs)
 
-    def reset_project(self):
-        """Reset project data to factory settings with aggressive file unlocking."""
-        self.log_message("Resetting project data...")
+    def reset_project(self, archive: bool = False):
+        """Reset project data, optionally archiving instead of wiping."""
+        self.log_message(f"Resetting project data (archive={archive})...")
         
-        # 1. Force release of model from memory to unlock files on disk
+        # 1. Force release of model from memory
         self.model = None
         import gc
         gc.collect()
         self.log_message("Model cleared from memory.")
 
-        # 2. Comprehensive list of paths to wipe
+        if archive:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            archive_root = ML_DIR / "archive" / f"project_{ts}"
+            archive_root.mkdir(parents=True, exist_ok=True)
+            self.log_message(f"Archiving project to {archive_root.name}...")
+
+        # 2. Paths to wipe or archive
         targets = [
             ML_DIR / "datasets",
             ML_DIR / "runs",
@@ -51,22 +57,23 @@ class MLService:
         for p in targets:
             if p.exists():
                 try:
-                    self.log_message(f"Wiping {p.name}...")
-                    shutil.rmtree(p, ignore_errors=True)
-                    # Double check
-                    if p.exists():
-                        self.log_message(f"⚠️ {p.name} still exists, attempting force delete...")
-                        shutil.rmtree(p) 
+                    if archive:
+                        dst = archive_root / p.name
+                        shutil.move(str(p), str(dst))
+                    else:
+                        self.log_message(f"Wiping {p.name}...")
+                        shutil.rmtree(p, ignore_errors=True)
+                        if p.exists(): shutil.rmtree(p)
                 except Exception as e:
-                    self.log_message(f"❌ Could not wipe {p.name}: {e}")
+                    self.log_message(f"❌ Error on {p.name}: {e}")
         
-        # 3. Re-create critical empty structures
+        # 3. Re-create structures
         (ML_DIR / "data" / "test_images").mkdir(parents=True, exist_ok=True)
         (ML_DIR / "data" / "yolo_dataset").mkdir(parents=True, exist_ok=True)
         (ML_DIR / "data" / "yolo_merged").mkdir(parents=True, exist_ok=True)
         (ML_DIR / "datasets").mkdir(exist_ok=True)
         
-        # 4. Final reload of clean state
+        # 4. Final reload
         self.load_model()
         self.log_message("Project reset successful.")
 

@@ -162,22 +162,37 @@ export class ReviewComponent implements OnInit, OnDestroy {
 
     @HostListener('window:keydown', ['$event'])
     handleKeyboardEvent(event: KeyboardEvent) {
+        if (this.isLoading) return;
+
         const key = event.key.toLowerCase();
+        
+        // 1-9 for Class Assignment or Toggling
         const num = parseInt(key);
-        if (!isNaN(num) && num > 0 && this.prediction?.detections && num <= this.prediction.detections.length) {
-            this.highlightedIndex = num - 1;
-            this.toggleIgnore(this.prediction.detections[num - 1]);
-            if (this.highlightTimeout) clearTimeout(this.highlightTimeout);
-            this.highlightTimeout = setTimeout(() => this.highlightedIndex = null, 800);
-            return;
+        if (!isNaN(num) && num > 0) {
+            // If user is hovering over a detection or we have a single detection, change class?
+            // Existing logic: toggles ignore.
+            // New logic: If there are classes, maybe shift+number changes class?
+            // Actually, let's keep it simple: 1-9 toggles ignore for detection #N
+            // And maybe Q, W, E for class assignment of the "highlighted" one?
+            
+            if (this.prediction?.detections && num <= this.prediction.detections.length) {
+                this.highlightedIndex = num - 1;
+                this.toggleIgnore(this.prediction.detections[num - 1]);
+                if (this.highlightTimeout) clearTimeout(this.highlightTimeout);
+                this.highlightTimeout = setTimeout(() => this.highlightedIndex = null, 800);
+                return;
+            }
         }
 
-        if (key === 'arrowleft' || (event.shiftKey && key === 'n') || key === 'backspace') {
+        // Navigation & Batch
+        if (key === 'arrowleft' || key === 'a' || key === 'backspace') {
             this.reject();
-        } else if (key === 'arrowright' || (event.shiftKey && key === 'y') || key === 'enter') {
+        } else if (key === 'arrowright' || key === 'd' || key === 'enter') {
             this.accept();
-        } else if (key === 'c' && this.prediction) {
+        } else if (key === 'c' || key === 'y') {
             this.markAll(true);
+        } else if (key === 'x' || key === 'n') {
+            this.markAll(false);
         } else if (key === 'm' || key === 'escape') {
             this.goBack();
         }

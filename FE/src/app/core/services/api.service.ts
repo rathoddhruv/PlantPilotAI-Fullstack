@@ -96,7 +96,7 @@ export class ApiService {
         return this.http.get<{ logs: string[] }>(`${API_URL}/project/logs`);
     }
 
-    resetProject(): Observable<any> {
-        return this.http.post(`${API_URL}/project/reset`, {});
+    resetProject(archive: boolean = false): Observable<any> {
+        return this.http.post(`${API_URL}/project/reset?archive=${archive}`, {});
     }
 }

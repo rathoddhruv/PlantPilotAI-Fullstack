@@ -65,7 +65,7 @@ export class UploadComponent implements OnInit, OnDestroy {
     constructor(
         private api: ApiService,
         private router: Router,
-        private reviewQueue: ReviewQueueService
+        public reviewQueue: ReviewQueueService
     ) { }
 
     addLog(msg: string) {
@@ -427,18 +427,21 @@ export class UploadComponent implements OnInit, OnDestroy {
     }
 
     openProjectReset() {
-        if (confirm('Are you sure you want to PURGE all project images and reset the model? This cannot be undone.')) {
+        if (confirm('RESET PROJECT: This will ARCHIVE your current dataset and runs, allowing you to start fresh while keeping backups. Proceed?')) {
             this.status = 'initializing';
-            this.statusTitle = 'Purging Environment';
-            this.statusMessage = 'Deleting files and resetting weights...';
-            this.api.resetProject().subscribe({
+            this.statusTitle = 'Archiving Project';
+            this.statusMessage = 'Moving files to archive...';
+            this.api.resetProject(true).subscribe({
                 next: () => {
                     this.status = 'idle';
-                    this.addLog("Project successfully purged.");
+                    this.addLog("Project successfully archived. Environment is clean.");
+                    this.datasetImages = '0';
+                    this.datasetClasses = '0';
+                    this.runCount = 0;
                 },
                 error: (err) => {
                     this.status = 'idle';
-                    this.error = "Purge failed: " + (err.error?.detail || err.message);
+                    this.error = "Archive failed: " + (err.error?.detail || err.message);
                 }
             });
         }

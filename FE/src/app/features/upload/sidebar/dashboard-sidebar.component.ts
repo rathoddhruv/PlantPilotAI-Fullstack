@@ -76,13 +76,17 @@ import { ApiService, RunInfo } from '../../../core/services/api.service';
           </div>
         </div>
       <!-- Danger Zone -->
-      <div class="mt-8 pt-6 border-t border-gray-800">
-        <h3 class="text-sm font-bold text-red-500/80 uppercase mb-3">Danger Zone</h3>
-        <button (click)="resetProject()" 
-                class="w-full py-2.5 text-xs font-bold border border-red-900/50 bg-red-900/10 rounded-xl hover:bg-red-900/30 text-red-400 transition-all flex items-center justify-center gap-2">
-          <span>⚠️</span> RESET PROJECT
+      <div class="mt-8 pt-6 border-t border-gray-800 space-y-2">
+        <h3 class="text-sm font-bold text-red-500/80 uppercase mb-3 px-1">Maintenance</h3>
+        <button (click)="resetProject(true)" 
+                class="w-full py-2.5 text-xs font-bold border border-blue-900/30 bg-blue-900/10 rounded-xl hover:bg-blue-900/30 text-blue-400 transition-all flex items-center justify-center gap-2">
+          <span>📦</span> ARCHIVE & RESET
         </button>
-        <p class="text-[10px] text-gray-600 mt-2 text-center">Deletes all datasets, runs, and model history.</p>
+        <button (click)="resetProject(false)" 
+                class="w-full py-2.5 text-xs font-bold border border-red-900/50 bg-red-900/10 rounded-xl hover:bg-red-900/30 text-red-400 transition-all flex items-center justify-center gap-2">
+          <span>🔥</span> FULL ENVIRONMENT WIPE
+        </button>
+        <p class="text-[9px] text-gray-600 mt-2 text-center uppercase tracking-tighter">Wipe is irreversible</p>
       </div>
 
     </div>
@@ -114,14 +118,19 @@ export class DashboardSidebarComponent implements OnInit {
     });
   }
 
-  resetProject() {
-    if (!confirm("CRITICAL: This will delete ALL training data and models. Continue?")) return;
-    this.api.resetProject().subscribe({
+  resetProject(archive: boolean = true) {
+    const msg = archive 
+      ? "SOFT RESET: This will archive your current work and start fresh. Backups will be kept. Continue?"
+      : "FULL WIPE: This will PERMANENTLY delete everything (runs, datasets, models). NO BACKUP. Continue?";
+    
+    if (!confirm(msg)) return;
+    
+    this.api.resetProject(archive).subscribe({
       next: () => {
-        alert('Project reset successfully. Page will reload.');
+        alert(archive ? 'Project archived. Starting fresh.' : 'Environment wiped.');
         window.location.reload();
       },
-      error: (e) => alert('Reset failed: ' + e.message)
+      error: (e) => alert('Operation failed: ' + e.message)
     });
   }
 }
