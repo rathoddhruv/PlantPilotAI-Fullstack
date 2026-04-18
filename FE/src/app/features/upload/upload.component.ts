@@ -5,7 +5,6 @@ import { ApiService, RunInfo } from '../../core/services/api.service';
 import { Router } from '@angular/router';
 import { interval, Subscription } from 'rxjs';
 import { startWith, switchMap } from 'rxjs/operators';
-import { DashboardSidebarComponent } from './sidebar/dashboard-sidebar.component';
 import { ReviewQueueService } from '../../core/services/review-queue.service';
 
 export interface LogEntry {
@@ -18,7 +17,7 @@ export interface LogEntry {
 @Component({
     selector: 'app-upload',
     standalone: true,
-    imports: [CommonModule, FormsModule, DashboardSidebarComponent],
+    imports: [CommonModule, FormsModule],
     templateUrl: './upload.component.html',
     styleUrls: ['./upload.component.scss']
 })
@@ -36,8 +35,10 @@ export class UploadComponent implements OnInit, OnDestroy {
     lastUpdate = '-';
     error = '';
 
-    datasetImages = '-';
-    datasetClasses = '-';
+    datasetImages = '0';
+    datasetClasses = '0';
+    stagedImages = 0;
+    stagedClasses = 0;
 
     // Training Settings
     trainEpochs = 40;
@@ -45,7 +46,7 @@ export class UploadComponent implements OnInit, OnDestroy {
     trainModel = 'yolov8n.pt';
     isFreshStart = false;
 
-    // Mode Toggle: train (with review/labeling) vs test (direct inference results)
+    // Mode Toggle
     appMode: 'train' | 'test' = 'train';
     testConfidence = 0.25;
 
@@ -67,27 +68,21 @@ export class UploadComponent implements OnInit, OnDestroy {
 
     constructor(
         private api: ApiService,
-        private router: Router,
+        public router: Router, // FIXED: Public for template access
         public reviewQueue: ReviewQueueService
     ) { }
 
     addLog(msg: string) {
-        // Don't manually add logs during training (polling handles it) unless it's an error
         if (this.status === 'training' && !msg.toLowerCase().includes('error')) return;
 
-        this.pushLogEntry(msg);
-    }
-
-    private pushLogEntry(msg: string) {
         const timestamp = new Date().toLocaleTimeString();
         let type: 'info' | 'error' | 'success' | 'warn' = 'info';
 
         const lower = msg.toLowerCase();
-        if (lower.includes('error') || lower.includes('fail')) type = 'error';
+        if (lower.includes('error')) type = 'error';
         else if (lower.includes('success') || lower.includes('complete')) type = 'success';
-        else if (lower.includes('warn') || lower.includes('reloading')) type = 'warn';
+        else if (lower.includes('warn')) type = 'warn';
 
-        // Grouping Check (Compare with top log)
         if (this.devLogs.length > 0) {
             const top = this.devLogs[0];
             if (top.msg === msg) {
@@ -97,91 +92,83 @@ export class UploadComponent implements OnInit, OnDestroy {
             }
         }
 
-        this.devLogs.unshift({
-            msg,
-            count: 1,
-            time: timestamp,
-            type
-        });
-
-        if (this.devLogs.length > 200) {
-            this.devLogs.pop();
-        }
+        this.devLogs.unshift({ msg, count: 1, time: timestamp, type });
+        if (this.devLogs.length > 200) this.devLogs.pop();
     }
 
     ngOnInit() {
-        // Restore persistsed mode
         const savedMode = localStorage.getItem('plantpilot_app_mode');
         if (savedMode === 'train' || savedMode === 'test') {
             this.appMode = savedMode;
         }
 
-        // Restore parameters
         this.trainEpochs = Number(localStorage.getItem('plantpilot_train_epochs')) || 40;
         this.trainImgsz = Number(localStorage.getItem('plantpilot_train_imgsz')) || 960;
-
-        // Smarter default: if we have runs, default to resume from best.pt
         const savedModel = localStorage.getItem('plantpilot_train_model');
         this.trainModel = savedModel || 'yolov8n.pt';
-
         this.testConfidence = Number(localStorage.getItem('plantpilot_test_conf')) || 0.25;
 
-        this.statusPollSub = interval(5000).pipe(
-            startWith(0),
-            switchMap(() => this.api.getRuns())
-        ).subscribe({
-            next: (res: any) => {
-                this.runs = res.runs;
-                this.manifest = res.manifest;
+        // 1. Initial Data Load
+        this.refreshAllData();
 
-                // Sync Dataset Stats from Manifest and Run Args
-                const current = res.runs.find((r: any) => r.kind === 'current');
-                const best = res.runs.find((r: any) => r.name === 'best.pt');
-
-                // 1. Extract Number of Classes
-                if (current?.args?.nc) {
-                    this.datasetClasses = current.args.nc.toString();
-                } else if (res.manifest && res.manifest.length > 0) {
-                    const lastMeta = [...res.manifest].reverse().find(m => m.nc);
-                    if (lastMeta) this.datasetClasses = lastMeta.nc.toString();
-                }
-
-                // 2. Extract Total Image Count
-                if (res.manifest && res.manifest.length > 0) {
-                    const lastCount = [...res.manifest].reverse().find(m => m.total_images);
-                    if (lastCount) this.datasetImages = lastCount.total_images.toString();
-                }
-
-                // 3. Update Model Status Display
-                if (current) {
-                    this.currentModelName = current.name;
-                } else if (best) {
-                    this.currentModelName = 'best.pt (Refined)';
-                    if (!localStorage.getItem('plantpilot_train_model')) {
-                        this.trainModel = 'best.pt';
-                    }
-                } else {
-                    this.currentModelName = 'Base Model (Unrefined)';
-                }
-
-                this.runCount = res.runs.length;
-                this.lastUpdate = new Date().toLocaleTimeString();
-            },
-            error: () => {
-                this.currentModelName = 'yolov8s.pt (Fallback)';
-            }
-        });
-
-        // 4. Fetch System/Hardware Info
+        // 2. Hardware Status Check
         this.api.getSystemInfo().subscribe({
-            next: (res: any) => {
-                this.cudaAvailable = res.cuda_available;
-            },
+            next: (res: any) => this.cudaAvailable = res.cuda_available,
             error: () => {
                 this.cudaAvailable = false;
-                this.addLog("⚠️ Hardware Status Unknown: Connection to backend node lost.");
+                this.addLog("⚠️ Hardware Status Unknown.");
             }
         });
+
+        // 3. Neural Heartbeat (Detect Background Training)
+        this.api.getLogs().subscribe(res => {
+            if (res.logs && res.logs.length > 0) {
+                const logs = res.logs.slice(-50).join('\n').toLowerCase();
+                const isTraining = (logs.includes('epoch') || logs.includes('training') || logs.includes('scanning') || logs.includes('ultralytics yolo'))
+                                && !logs.includes('training completed successfully')
+                                && !logs.includes('rollback successful');
+                
+                if (isTraining) {
+                    this.addLog("♻️ Recovering active training session...");
+                    this.status = 'training';
+                    this.statusTitle = 'Forging Neural Engine';
+                    this.statusMessage = 'Refinement in progress...';
+                    this.startLogPolling();
+                }
+            }
+        });
+    }
+
+    refreshAllData() {
+        this.api.getRuns().subscribe(res => this.syncRunsData(res));
+        this.api.getStagedStats().subscribe(res => {
+            this.stagedImages = res.images;
+            this.stagedClasses = res.classes;
+        });
+    }
+
+    private syncRunsData(res: any) {
+        this.runs = res.runs;
+        this.manifest = res.manifest;
+
+        const current = res.runs.find((r: any) => r.kind === 'current');
+        const best = res.runs.find((r: any) => r.name === 'best.pt');
+
+        if (current?.args?.nc) {
+            this.datasetClasses = current.args.nc.toString();
+        } else if (res.manifest && res.manifest.length > 0) {
+            const lastMeta = [...res.manifest].reverse().find((m: any) => m.nc);
+            if (lastMeta) this.datasetClasses = lastMeta.nc.toString();
+        }
+
+        if (res.manifest && res.manifest.length > 0) {
+            const lastCount = [...res.manifest].reverse().find((m: any) => m.total_images);
+            if (lastCount) this.datasetImages = lastCount.total_images.toString();
+        }
+
+        this.currentModelName = current ? current.name : (best ? 'best.pt (Refined)' : 'Base Model');
+        this.runCount = res.runs.length;
+        this.lastUpdate = new Date().toLocaleTimeString();
     }
 
     setMode(mode: 'train' | 'test') {
@@ -197,26 +184,21 @@ export class UploadComponent implements OnInit, OnDestroy {
     }
 
     ngOnDestroy() {
-        if (this.statusPollSub) this.statusPollSub.unsubscribe();
         this.stopLogPolling();
     }
 
-    // --- Drag & Drop ---
     onDragOver(event: DragEvent) {
         event.preventDefault();
-        event.stopPropagation();
         this.isDragOver = true;
     }
 
     onDragLeave(event: DragEvent) {
         event.preventDefault();
-        event.stopPropagation();
         this.isDragOver = false;
     }
 
     onDrop(event: DragEvent) {
         event.preventDefault();
-        event.stopPropagation();
         this.isDragOver = false;
         const files = event.dataTransfer?.files;
         if (files && files.length > 0) this.handleFiles(files);
@@ -232,14 +214,8 @@ export class UploadComponent implements OnInit, OnDestroy {
         const files = Array.from(fileList);
 
         if (this.appMode === 'train') {
-            // Training Mode logic
             const zipFile = files.find(f => f.name.endsWith('.zip'));
             if (zipFile) {
-                if (files.length > 1) {
-                    this.error = 'Please upload only one ZIP file at a time for training.';
-                    return;
-                }
-                this.addLog("ZIP file dropped: " + zipFile.name);
                 this.startZipFlow(zipFile);
                 return;
             }
@@ -249,93 +225,38 @@ export class UploadComponent implements OnInit, OnDestroy {
                 this.addLog(`Queueing ${imageFiles.length} images for ACTIVE LEARNING.`);
                 this.reviewQueue.setFiles(imageFiles);
                 this.router.navigate(['/review'], { state: { testMode: false, conf: this.testConfidence } });
-            } else {
-                this.error = 'Drop a ZIP for project init or Images for active learning.';
             }
         } else {
-            // TEST Mode logic
             const imageFiles = files.filter(f => f.type.startsWith('image/'));
-            if (imageFiles.length === 0) {
-                this.error = 'Test mode requires image files (.jpg, .png). ZIPs are for training.';
-                return;
+            if (imageFiles.length > 0) {
+                this.addLog(`Testing model with ${imageFiles.length} items...`);
+                this.reviewQueue.setFiles(imageFiles);
+                this.router.navigate(['/review'], { state: { testMode: true, conf: this.testConfidence } });
             }
-
-            this.addLog(`Testing model with ${imageFiles.length} items...`);
-            this.reviewQueue.setFiles(imageFiles);
-            this.router.navigate(['/review'], { state: { testMode: true, conf: this.testConfidence } });
         }
     }
 
-    // --- Process Flow ---
     startZipFlow(file: File) {
         this.status = 'initializing';
-        this.statusTitle = this.isFreshStart ? 'Resetting & Initializing' : 'Initializing Project';
+        this.statusTitle = 'Initializing Project';
         this.statusMessage = 'Uploading...';
         this.progressPercent = 10;
-        this.extractedCount = 0;
 
-        // Sequence: Reset (Optional) -> Init -> Poll Logs
-        const flow$ = this.isFreshStart
-            ? this.api.resetProject().pipe(switchMap(() => this.api.initProject(file, this.trainEpochs, this.trainImgsz, this.trainModel)))
-            : this.api.initProject(file, this.trainEpochs, this.trainImgsz, this.trainModel);
-
-        flow$.subscribe({
-            next: (res) => {
+        this.api.initProject(file, this.trainEpochs, this.trainImgsz, this.trainModel).subscribe({
+            next: () => {
                 this.progressPercent = 30;
-                this.addLog("Init success. Training started.");
-
                 this.status = 'training';
                 this.statusTitle = 'Training in Progress';
-                this.statusMessage = 'Streaming logs from backend...';
-
+                this.statusMessage = 'Streaming logs...';
                 this.startLogPolling();
-
-                // Fake progress visual since validation takes time
-                let p = 30;
-                const int = setInterval(() => {
-                    if (this.status !== 'training') {
-                        clearInterval(int);
-                        return;
-                    }
-                    if (p < 90) {
-                        p++;
-                        this.progressPercent = p;
-                    }
-                }, 1000);
             },
-            error: (err: any) => {
+            error: (err) => {
                 this.status = 'idle';
-                const msg = err.error?.detail || err.message || "Upload failed";
-                this.error = "Faled: " + msg;
-                this.addLog("Error: " + msg);
+                this.error = "Init failed: " + (err.error?.detail || err.message);
             }
         });
     }
 
-    startPredictionFlow(file: File) {
-        this.addLog("Starting prediction for " + file.name);
-        this.status = 'initializing';
-        this.statusTitle = 'Analyzing';
-        this.statusMessage = 'Running Inference...';
-        this.progressPercent = 60;
-
-        this.api.predict(file).subscribe({
-            next: (res: any) => {
-                this.progressPercent = 100;
-                this.addLog("Prediction success.");
-                setTimeout(() => {
-                    this.status = 'idle';
-                    this.router.navigate(['/review'], { state: { prediction: res } });
-                }, 500);
-            },
-            error: (err: any) => {
-                this.status = 'idle';
-                this.error = "Prediction failed: " + (err.error?.detail || err.message);
-            }
-        });
-    }
-
-    // --- Logging ---
     startLogPolling() {
         this.stopLogPolling();
         this.logSub = interval(1000).pipe(
@@ -344,34 +265,33 @@ export class UploadComponent implements OnInit, OnDestroy {
             next: (res) => {
                 if (res.logs && res.logs.length > 0) {
                     this.devLogs = this.processBackendLogs(res.logs);
+                    const latestLog = res.logs[res.logs.length - 1].toLowerCase();
+                    const logTail = res.logs.slice(-5).join(" ").toLowerCase();
 
                     // --- Real-time Stage Detection ---
-                    const latestLog = res.logs[res.logs.length - 1];
-                    const lowerLog = latestLog.toLowerCase();
-
-                    if (lowerLog.includes("unpacking") || lowerLog.includes("extracting")) {
+                    if (logTail.includes("unpacking") || logTail.includes("extracting")) {
                         this.statusMessage = "Stage 1/5: Unpacking & Preparing Dataset...";
-                    } else if (lowerLog.includes("scanning") || lowerLog.includes("validation")) {
+                        this.progressPercent = 15;
+                    } else if (logTail.includes("scanning") || logTail.includes("validation")) {
                         this.statusMessage = "Stage 2/5: Validating Annotations...";
-                    } else if (lowerLog.includes("initial") || lowerLog.includes("weights")) {
+                        this.progressPercent = 30;
+                    } else if (logTail.includes("initial") || logTail.includes("weights") || logTail.includes("igniting")) {
                         this.statusMessage = "Stage 3/5: Initializing YOLO Weights...";
-                    } else if (lowerLog.includes("epoch")) {
-                        // Extract "Epoch X/Y" if possible
-                        const match = latestLog.match(/epoch\s+(\d+\/\d+)/i);
-                        const progress = match ? ` (${match[1]})` : "";
-                        this.statusMessage = `Stage 4/5: Active Training${progress}...`;
-                    } else if (lowerLog.includes("fusing") || lowerLog.includes("results")) {
+                        this.progressPercent = 45;
+                    } else if (logTail.includes("epoch")) {
+                        const match = logTail.match(/epoch\s+(\d+\/\d+)/i);
+                        this.statusMessage = `Stage 4/5: Active Training${match ? ' ('+match[1]+')' : ''}...`;
+                        this.progressPercent = 60; // Base progress for training stage
+                    } else if (logTail.includes("fusing") || logTail.includes("saving")) {
                         this.statusMessage = "Stage 5/5: Finalizing & Saving Best Model...";
+                        this.progressPercent = 90;
                     }
 
-                    // Check if finished (Scan last 5 lines for robustness)
-                    const logTail = res.logs.slice(-5).join(" ").toLowerCase();
-                    if (logTail.includes("reloading model") || logTail.includes("training completed successfully")) {
-                        this.status = 'ready';
-                        this.statusTitle = 'Training Complete';
-                        this.statusMessage = 'AWAITING DISPATCH: Model updated successfully.';
+                    if (logTail.includes("training completed successfully")) {
                         this.stopLogPolling();
+                        this.statusMessage = "Refinement Successful. Model updated.";
                         this.progressPercent = 100;
+                        this.refreshAllData();
                         setTimeout(() => this.status = 'idle', 5000);
                     }
                 }
@@ -380,25 +300,18 @@ export class UploadComponent implements OnInit, OnDestroy {
     }
 
     processBackendLogs(logs: string[]): LogEntry[] {
-        // Process raw strings into grouped entries
         const entries: LogEntry[] = [];
-
         for (const line of logs) {
             let type: 'info' | 'error' | 'success' | 'warn' = 'info';
             const lower = line.toLowerCase();
-            if (lower.includes('error') || lower.includes('fail')) type = 'error';
-            else if (lower.includes('success') || lower.includes('complete')) type = 'success';
-            else if (lower.includes('warn') || lower.includes('reloading')) type = 'warn';
+            if (lower.includes('error')) type = 'error';
+            else if (lower.includes('complete')) type = 'success';
+            else if (lower.includes('warn')) type = 'warn';
 
             if (entries.length > 0 && entries[entries.length - 1].msg === line) {
                 entries[entries.length - 1].count++;
             } else {
-                entries.push({
-                    msg: line,
-                    count: 1,
-                    time: '',
-                    type
-                });
+                entries.push({ msg: line, count: 1, time: '', type });
             }
         }
         return entries.reverse();
@@ -411,53 +324,58 @@ export class UploadComponent implements OnInit, OnDestroy {
         }
     }
 
-    // --- Resizing Logic ---
-    startResizeSidebar(e: MouseEvent) {
-        e.preventDefault();
-        this.isResizingSidebar = true;
+    openProjectReset(archive: boolean = true) {
+        this.status = 'initializing';
+        this.statusTitle = archive ? 'Archiving Project' : 'Purging Environment';
+        this.api.resetProject(archive).subscribe({
+            next: () => {
+                this.status = 'idle';
+                this.datasetImages = '0';
+                this.datasetClasses = '0';
+                this.stagedImages = 0;
+                this.stagedClasses = 0;
+                this.runCount = 0;
+                this.reviewQueue.clear();
+                this.refreshAllData();
+            },
+            error: (err) => {
+                this.status = 'idle';
+                this.error = "Action failed: " + (err.error?.detail || err.message);
+            }
+        });
     }
 
-    startResizeConsole(e: MouseEvent) {
-        e.preventDefault();
-        this.isResizingConsole = true;
+    triggerManualRefinement() {
+        if (!confirm('🚀 START MANUAL REFINEMENT: Trigger neural training on all active labels?')) return;
+        
+        this.status = 'training';
+        this.statusTitle = 'Forging Neural Engine';
+        this.statusMessage = 'Manually dispatched refinement...';
+        this.progressPercent = 10;
+        
+        this.api.triggerTraining(this.trainEpochs, this.trainImgsz, this.trainModel).subscribe({
+            next: () => {
+                this.addLog("✅ Manual refinement dispatched successfully.");
+                this.startLogPolling();
+            },
+            error: (err) => {
+                this.status = 'idle';
+                this.error = "Refinement failed: " + (err.error?.detail || err.message);
+            }
+        });
     }
 
-    @HostListener('document:mousemove', ['$event'])
-    onMouseMove(e: MouseEvent) {
-        if (this.isResizingSidebar) {
-            this.sidebarWidth = Math.max(200, Math.min(e.clientX, 600)); // Clamp 200-600
-        }
-        if (this.isResizingConsole) {
-            const containerHeight = window.innerHeight;
-            const newHeight = containerHeight - e.clientY;
-            this.consoleHeight = Math.max(100, Math.min(newHeight, 800)); // Clamp 100-800
-        }
-    }
-
-    @HostListener('document:mouseup')
-    onMouseUp() {
-        this.isResizingSidebar = false;
-        this.isResizingConsole = false;
-    }
-
-    openProjectReset() {
-        if (confirm('RESET PROJECT: This will ARCHIVE your current dataset and runs, allowing you to start fresh while keeping backups. Proceed?')) {
-            this.status = 'initializing';
-            this.statusTitle = 'Archiving Project';
-            this.statusMessage = 'Moving files to archive...';
-            this.api.resetProject(true).subscribe({
-                next: () => {
-                    this.status = 'idle';
-                    this.addLog("Project successfully archived. Environment is clean.");
-                    this.datasetImages = '0';
-                    this.datasetClasses = '0';
-                    this.runCount = 0;
-                },
-                error: (err) => {
-                    this.status = 'idle';
-                    this.error = "Archive failed: " + (err.error?.detail || err.message);
-                }
-            });
-        }
+    flushStagedData() {
+        if (!confirm('🧼 FLUSH STAGING: Clear all pending images and start fresh?')) return;
+        
+        this.api.flushStaged().subscribe({
+            next: () => {
+                this.addLog("🧼 Staging folder cleared.");
+                this.refreshAllData();
+            },
+            error: (err) => {
+                this.error = "Flush failed: " + (err.error?.detail || err.message);
+            }
+        });
     }
 }

@@ -1,158 +1,113 @@
-from fastapi import APIRouter, UploadFile, File, BackgroundTasks, HTTPException, Form
-from BE.settings import LABEL_STUDIO_DIR
-from BE.services.ml_service import MLService
-import shutil
-import logging
-import sys
-import zipfile
-import json
+from fastapi import APIRouter, UploadFile, File, BackgroundTasks, HTTPException
 from pathlib import Path
-
-logger = logging.getLogger(__name__)
-router = APIRouter()
+import shutil
+import os
 from BE.services.ml_service import ml_service
+from BE.settings import ML_DIR
+from typing import List
+
+router = APIRouter()
+
+@router.post("/upload")
+async def upload_images(files: List[UploadFile] = File(...)):
+    """Upload images for immediate inference/review."""
+    uploaded_paths = []
+    temp_dir = ML_DIR / "data" / "test_images"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    
+    for file in files:
+        file_path = temp_dir / file.filename
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        uploaded_paths.append(file.filename)
+    
+    return {"status": "success", "files": uploaded_paths}
 
 @router.post("/init")
-def initialize_project(
-    background_tasks: BackgroundTasks, 
+async def init_project(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    epochs: int = Form(40),
-    imgsz: int = Form(960),
-    model: str = Form("yolov8n.pt")
+    epochs: int = 100,
+    imgsz: int = 960,
+    model: str = "yolov8n.pt"
 ):
-    """
-    Upload a Label Studio ZIP export and initialize the dataset.
-    """
-    if not file.filename.endswith(".zip"):
-        raise HTTPException(status_code=400, detail="File must be a ZIP archive")
-
-    LABEL_STUDIO_DIR.mkdir(parents=True, exist_ok=True)
-    destination = LABEL_STUDIO_DIR / file.filename
-    
-    with destination.open("wb") as buffer:
+    """Full project initialization from Label Studio ZIP."""
+    # Save zip
+    temp_zip = ML_DIR / "temp" / file.filename
+    temp_zip.parent.mkdir(exist_ok=True)
+    with temp_zip.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-
-    logger.info(f"Project init called with file {file.filename}, epochs={epochs}, imgsz={imgsz}")
     
-    def _background_process():
-        try:
-            # Extract and setup dataset
-            ml_service.run_import_zip(destination)
-            # Trigger training
-            ml_service.run_training(epochs=epochs, imgsz=imgsz, model=model)
-        except Exception as e:
-            logger.exception("Background process failed")
-            ml_service.log_message(f"Background process error: {str(e)}")
-
-    # Trigger background thread for both import and training
-    logger.info("Starting background import/train thread")
-    import threading
-    t = threading.Thread(target=_background_process, daemon=True)
-    t.start()
-    
-    return {"status": "success", "message": "Project initialized. Processing and training started in background."}
-
-@router.post("/train")
-async def trigger_training(background_tasks: BackgroundTasks):
-    """
-    Manually trigger the active learning pipeline (retraining).
-    """
-    background_tasks.add_task(ml_service.run_training)
-    return {"status": "success", "message": "Training started in background."}
-
-class AnnotationRequest(json.BaseModel if 'BaseModel' in locals().get('pydantic', {}).__dir__() else object):
-    pass 
-# Wait, need Pydantic
-from pydantic import BaseModel
-from typing import List, Tuple
-
-class DetectionBox(BaseModel):
-    box: List[float] # x1, y1, x2, y2
-    class_: str 
-    # Mapped from 'class' in frontend, but check pydantic alias if needed. 
-    # Actually frontend sends {class: "foo", box: []}. "class" is reserved keyword in python? no.
-
-class AnnotationPayload(BaseModel):
-    filename: str
-    detections: List[dict]
-    width: int
-    height: int
-
-@router.post("/annotate")
-def save_annotation(payload: AnnotationPayload):
-    """
-    Save validated annotations and add image to training set.
-    """
+    # Run sync import then background training
     try:
-        ml_service.save_annotation(payload.filename, payload.detections, payload.width, payload.height)
-        return {"status": "success", "message": "Annotation saved."}
+        ml_service.run_import_zip(temp_zip)
+        background_tasks.add_task(ml_service.run_training, epochs=epochs, imgsz=imgsz, model=model)
+        return {"status": "success", "message": "Import successful. Training started in background."}
     except Exception as e:
-        logger.exception("Annotation save failed")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/logs")
-def get_logs():
-    """Return recent logs from the ML service."""
-    return {"logs": ml_service.get_logs()}
+@router.post("/refine")
+async def trigger_refinement(
+    background_tasks: BackgroundTasks,
+    epochs: int = 40,
+    imgsz: int = 960,
+    model: str = "yolov8n.pt"
+):
+    """Trigger active learning refinement on the currently staged data."""
+    # Note: Fetch current settings or use defaults
+    background_tasks.add_task(ml_service.run_training, epochs=epochs, imgsz=imgsz, model=model)
+    return {"status": "success", "message": "Neural refinement started."}
 
-@router.post("/inspect-zip")
-async def inspect_zip(file: UploadFile = File(...)):
-    """
-    Inspect ZIP contents without processing.
-    Returns image count and detected classes.
-    """
-    if not file.filename.endswith(".zip"):
-        raise HTTPException(status_code=400, detail="File must be a ZIP archive")
-    
+@router.post("/annotate")
+async def save_annotation(data: dict):
+    """Save a verified annotation to the training set."""
     try:
-        # Save temp file
-        temp_path = LABEL_STUDIO_DIR / f"temp_{file.filename}"
-        LABEL_STUDIO_DIR.mkdir(parents=True, exist_ok=True)
-        
-        with temp_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # Inspect ZIP
-        image_count = 0
-        classes = set()
-        
-        with zipfile.ZipFile(temp_path, 'r') as zf:
-            for name in zf.namelist():
-                # Count images
-                if name.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
-                    image_count += 1
-                
-                # Try to find Label Studio JSON
-                if name.endswith('.json') and 'result' not in name:
-                    try:
-                        content = zf.read(name).decode('utf-8')
-                        data = json.loads(content)
-                        # Extract class names from Label Studio format
-                        if isinstance(data, list):
-                            for item in data:
-                                if 'annotations' in item:
-                                    for ann in item['annotations']:
-                                        if 'result' in ann:
-                                            for res in ann['result']:
-                                                if 'value' in res and 'rectanglelabels' in res['value']:
-                                                    classes.update(res['value']['rectanglelabels'])
-                    except:
-                        pass
-        
-        # Clean up temp file
-        temp_path.unlink()
-        
-        return {
-            "image_count": image_count,
-            "classes": sorted(list(classes)) if classes else [],
-            "file_size_mb": round(temp_path.stat().st_size / (1024 * 1024), 2) if temp_path.exists() else 0
-        }
+        ml_service.save_annotation(
+            filename=data['filename'],
+            detections=data['detections'],
+            width=data['width'],
+            height=data['height']
+        )
+        return {"status": "success"}
     except Exception as e:
-        logger.exception("ZIP inspection failed")
-        raise HTTPException(status_code=500, detail=f"Failed to inspect ZIP: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/reset")
 def reset_project(archive: bool = False):
     """Reset all project data (datasets, runs), optionally archiving."""
     ml_service.reset_project(archive=archive)
     return {"status": "success", "message": f"Project {'reset' if not archive else 'archived'} complete."}
+
+@router.get("/staged-stats")
+def get_staged_stats():
+    """Returns counts of images/labels currently waiting in the merge folder."""
+    return ml_service.get_staged_stats()
+
+@router.get("/pending-images")
+def get_pending_images():
+    """List filenames currently in test_images awaiting review."""
+    temp_dir = ML_DIR / "data" / "test_images"
+    if not temp_dir.exists(): return {"files": []}
+    files = [f.name for f in temp_dir.glob("*") if f.suffix.lower() in [".jpg", ".jpeg", ".png"]]
+    return {"files": files}
+
+@router.get("/classes")
+def get_classes():
+    """Extract class names from the currently loaded model."""
+    if not ml_service.model: 
+        ml_service.load_model()
+    
+    if ml_service.model and hasattr(ml_service.model, 'names'):
+        return {"classes": list(ml_service.model.names.values())}
+    return {"classes": []}
+
+@router.get("/logs")
+def get_logs():
+    """Returns the current training log buffer."""
+    return {"logs": ml_service.logs}
+
+@router.post("/flush-staged")
+def flush_staged():
+    """Wipes the currently staged images and labels."""
+    ml_service.flush_staged()
+    return {"status": "success", "message": "Staged data cleared."}

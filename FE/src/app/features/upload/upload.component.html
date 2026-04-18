@@ -41,14 +41,24 @@
             </div>
 
             <!-- Stats Grid -->
-            <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto mb-10">
-                <div class="bg-slate-900/40 border border-slate-700/30 p-4 rounded-2xl text-center shadow-inner">
-                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Images</p>
-                    <p class="text-xl font-black text-white font-mono">{{ datasetImages }}</p>
+            <div class="grid grid-cols-2 gap-4 max-w-md mx-auto mb-10">
+                <div class="bg-slate-900/40 border border-slate-700/30 p-4 rounded-2xl text-center shadow-inner group hover:border-indigo-500/50 transition-all relative">
+                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Trained (+ Ready)</p>
+                    <p class="text-xl font-black text-white font-mono flex items-center justify-center gap-2">
+                        {{ datasetImages }}
+                        <span *ngIf="stagedImages > 0" class="text-[10px] text-indigo-400 animate-pulse">(+{{ stagedImages }})</span>
+                    </p>
+                    <button *ngIf="stagedImages > 0" (click)="flushStagedData()" 
+                            class="absolute top-2 right-2 text-[8px] text-red-500/50 hover:text-red-500 font-bold uppercase tracking-tighter transition-colors">
+                        FLUSH 🧼
+                    </button>
                 </div>
-                <div class="bg-slate-900/40 border border-slate-700/30 p-4 rounded-2xl text-center shadow-inner">
-                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Classes</p>
-                    <p class="text-xl font-black text-white font-mono">{{ datasetClasses }}</p>
+                <div class="bg-slate-900/40 border border-slate-700/30 p-4 rounded-2xl text-center shadow-inner group hover:border-blue-500/50 transition-all">
+                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Neural Classes</p>
+                    <p class="text-xl font-black text-white font-mono flex items-center justify-center gap-2">
+                        {{ datasetClasses }}
+                        <span *ngIf="stagedClasses > 0" class="text-[10px] text-blue-400">(+{{ stagedClasses }})</span>
+                    </p>
                 </div>
             </div>
 
@@ -73,7 +83,6 @@
             <!-- Status (Process Updates Only) -->
             <div *ngIf="status !== 'idle'"
                 class="mb-10 animate-fade-in text-center p-10 bg-slate-900/60 rounded-[3rem] border-2 border-indigo-500/20 shadow-[0_0_50px_rgba(79,70,229,0.1)] relative overflow-hidden">
-                <!-- Background Pulse -->
                 <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-transparent to-emerald-500/5 animate-pulse-slow"></div>
 
                 <div class="relative h-2 bg-slate-800 rounded-full mb-8 overflow-hidden max-w-md mx-auto shadow-inner">
@@ -95,17 +104,13 @@
             <!-- Main Interaction Grid -->
             <div *ngIf="status === 'idle'" class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
                 <!-- Settings -->
-                <div
-                    class="bg-slate-900/40 border border-slate-700/50 p-6 rounded-3xl space-y-6 flex flex-col justify-center">
+                <div class="bg-slate-900/40 border border-slate-700/50 p-6 rounded-3xl space-y-6 flex flex-col justify-center">
                     <div class="space-y-3">
                         <div class="flex justify-between items-center">
-                            <span class="text-[10px] font-bold text-slate-100 uppercase tracking-widest">Confidence
-                                Threshold</span>
-                            <span class="text-xs font-mono font-black text-indigo-400">{{ (testConfidence *
-                                100).toFixed(0) }}%</span>
+                            <span class="text-[10px] font-bold text-slate-100 uppercase tracking-widest">Confidence Threshold</span>
+                            <span class="text-xs font-mono font-black text-indigo-400">{{ (testConfidence * 100).toFixed(0) }}%</span>
                         </div>
-                        <input type="range" min="0.01" max="0.95" step="0.01" [(ngModel)]="testConfidence"
-                            (change)="saveParams()"
+                        <input type="range" min="0.01" max="0.95" step="0.01" [(ngModel)]="testConfidence" (change)="saveParams()"
                             class="w-full accent-indigo-500 h-1 bg-slate-800 rounded-lg cursor-pointer">
                     </div>
 
@@ -129,35 +134,61 @@
                                 <option value="yolo11s.pt">YOLOv11 Small (Balanced)</option>
                                 <option value="yolov8n.pt">YOLOv8 Nano</option>
                                 <option value="yolov8s.pt">YOLOv8 Small</option>
-                                <option value="yolov10n.pt">YOLOv10 Nano</option>
                             </select>
                         </div>
                     </div>
                 </div>
 
-                <!-- Dropzone -->
-                <div (click)="fileInput.click()"
-                    class="p-8 border-2 border-dashed border-slate-700 rounded-3xl bg-slate-900/40 hover:bg-slate-800 transition-all group cursor-pointer flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[220px]">
-                    <div
-                        class="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center shadow-xl mb-4 group-hover:scale-105 transition-transform">
-                        <svg *ngIf="appMode === 'train'" class="w-8 h-8 text-indigo-400" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
-                            </path>
-                        </svg>
-                        <svg *ngIf="appMode === 'test'" class="w-8 h-8 text-emerald-400" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
+                <!-- Dropzone / Actions -->
+                <div class="flex flex-col gap-4">
+                    <div (click)="fileInput.click()"
+                        class="flex-1 p-8 border-2 border-dashed border-slate-700 rounded-3xl bg-slate-900/40 hover:bg-slate-800 transition-all group cursor-pointer flex flex-col items-center justify-center text-center">
+                        <div class="w-12 h-12 bg-slate-800 rounded-2xl flex items-center justify-center shadow-xl mb-3 group-hover:scale-105 transition-transform">
+                            <svg *ngIf="appMode === 'train'" class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                            <svg *ngIf="appMode === 'test'" class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <p class="text-xs font-black text-white uppercase tracking-tight">{{ appMode === 'train' ? 'Upload Training Set' : 'Scan Test Image' }}</p>
+                        <p class="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest italic">Supports ZIP / JPG / PNG</p>
+                        <input type="file" multiple #fileInput (change)="onFileSelected($event)" class="hidden">
                     </div>
-                    <p class="text-sm font-black text-white uppercase tracking-tight">{{ appMode === 'train' ? 'Upload Training Set' : 'Scan Test Image' }}</p>
-                    <p class="text-[9px] text-slate-500 mt-1 uppercase font-bold tracking-widest">ZIP / JPG / PNG</p>
-                    <div *ngIf="reviewQueue.getStats().total > 0" class="mt-4 px-3 py-1 bg-indigo-500 text-white text-[10px] font-black rounded-full shadow-lg animate-bounce">
-                        {{ reviewQueue.getStats().total }} IMAGES IN QUEUE
+
+                    <!-- Detailed Queue Status -->
+                    <div *ngIf="reviewQueue.getStats().total > 0 && appMode === 'train'" 
+                         class="p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl flex items-center justify-between animate-fade-in group hover:bg-indigo-500/20 transition-all">
+                        <div class="flex items-center gap-3 text-left">
+                            <span class="text-xl animate-pulse">🎯</span>
+                            <div>
+                               <h3 class="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Human-in-the-Loop</h3>
+                               <p class="text-[9px] text-indigo-500/70 font-bold uppercase tracking-tighter">
+                                   {{ reviewQueue.getStats().total }} PENDING LABELS
+                               </p>
+                            </div>
+                        </div>
+                        <button (click)="router.navigate(['/review'])" 
+                                class="px-4 py-2 bg-indigo-500 rounded-xl text-[9px] font-black text-white uppercase tracking-widest transition-all">
+                            REVIEW ⚡
+                        </button>
                     </div>
-                    <input type="file" multiple #fileInput (change)="onFileSelected($event)" class="hidden">
+
+                    <!-- Manual Refinement Trigger -->
+                    <div *ngIf="stagedImages > 0 && status === 'idle'" 
+                         class="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-between animate-fade-in group hover:bg-emerald-500/20 transition-all">
+                         <div class="flex items-center gap-3 text-left">
+                            <span class="text-xl">🛠️</span>
+                            <div>
+                               <span class="text-[10px] font-black text-emerald-400 uppercase tracking-widest block leading-none mb-1">Staged Batch</span>
+                               <p class="text-[9px] text-emerald-500/70 font-bold uppercase tracking-tighter">Ready for Neural Fusion</p>
+                            </div>
+                         </div>
+                         <button (click)="triggerManualRefinement()" 
+                                 class="px-4 py-2 bg-emerald-500 rounded-xl text-[9px] font-black text-white uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20">
+                             RECODE 🚀
+                         </button>
+                    </div>
                 </div>
             </div>
         </div>

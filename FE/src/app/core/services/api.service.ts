@@ -69,9 +69,8 @@ export class ApiService {
         return this.http.post<PredictionResult>(`${API_URL}/inference/predict`, formData);
     }
 
-    triggerTraining(): Observable<any> {
-        // Calling project/train which triggers background task
-        return this.http.post(`${API_URL}/project/train`, {});
+    triggerTraining(epochs: number = 40, imgsz: number = 960, model: string = 'best.pt'): Observable<any> {
+        return this.http.post(`${API_URL}/project/refine?epochs=${epochs}&imgsz=${imgsz}&model=${model}`, {});
     }
 
     saveAnnotation(filename: string, detections: any[], width: number, height: number): Observable<any> {
@@ -98,5 +97,13 @@ export class ApiService {
 
     resetProject(archive: boolean = false): Observable<any> {
         return this.http.post(`${API_URL}/project/reset?archive=${archive}`, {});
+    }
+
+    getStagedStats(): Observable<{ images: number, classes: number }> {
+        return this.http.get<{ images: number, classes: number }>(`${API_URL}/project/staged-stats`);
+    }
+
+    flushStaged(): Observable<any> {
+        return this.http.post(`${API_URL}/project/flush-staged`, {});
     }
 }

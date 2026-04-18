@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../core/services/api.service';
-import { interval, Subscription, switchMap } from 'rxjs';
+import { interval, Subscription, switchMap, startWith } from 'rxjs';
 
 export interface LogEntry {
     msg: string;
@@ -9,6 +9,8 @@ export interface LogEntry {
     time: string;
     type: 'info' | 'error' | 'success' | 'warn';
 }
+
+import { Input, OnChanges, SimpleChanges } from '@angular/core';
 
 @Component({
     selector: 'app-log-panel',
@@ -69,8 +71,9 @@ export interface LogEntry {
     :host { display: block; width: 100%; z-index: 40; }
   `]
 })
-export class LogPanelComponent implements OnInit, OnDestroy {
+export class LogPanelComponent implements OnInit, OnDestroy, OnChanges {
     @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
+    @Input() isActive: boolean = false;
 
     devLogs: LogEntry[] = [];
     logSub: Subscription | null = null;
@@ -82,7 +85,25 @@ export class LogPanelComponent implements OnInit, OnDestroy {
     constructor(private api: ApiService) { }
 
     ngOnInit() {
+        if (this.isActive) {
+            this.startPolling();
+        }
+    }
+
+    ngOnChanges(changes: SimpleChanges) {
+        if (changes['isActive']) {
+            if (this.isActive) {
+                this.startPolling();
+            } else {
+                this.stopPolling();
+            }
+        }
+    }
+
+    private startPolling() {
+        this.stopPolling(); // Force clean start
         this.logSub = interval(5000).pipe(
+            startWith(0),
             switchMap(() => this.api.getLogs())
         ).subscribe({
             next: (res) => {
@@ -91,6 +112,13 @@ export class LogPanelComponent implements OnInit, OnDestroy {
                 }
             }
         });
+    }
+
+    private stopPolling() {
+        if (this.logSub) {
+            this.logSub.unsubscribe();
+            this.logSub = null;
+        }
     }
 
     processLogs(logs: string[]) {
@@ -174,6 +202,6 @@ export class LogPanelComponent implements OnInit, OnDestroy {
     }
 
     ngOnDestroy() {
-        if (this.logSub) this.logSub.unsubscribe();
+        this.stopPolling();
     }
 }

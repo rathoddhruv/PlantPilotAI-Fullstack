@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
 import { TrainingSidebarComponent } from './features/review/sidebar/training-sidebar.component';
@@ -13,8 +13,10 @@ import { LogPanelComponent } from './shared/log-panel/log-panel.component';
   styleUrls: ['./app.component.scss']
 })
 export class AppComponent {
-  title = 'plant-pilot';
-  isConsoleVisible = true;
+  title = 'trainflow-vision';
+  isConsoleVisible = false;
+
+  constructor() {}
 
   toggleConsole() {
     this.isConsoleVisible = !this.isConsoleVisible;

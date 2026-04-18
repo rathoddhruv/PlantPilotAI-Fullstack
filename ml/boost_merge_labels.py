@@ -134,10 +134,12 @@ for label_file in LABEL_FOLDER.glob("*.txt"):
     corrupted = False
     for line in lines:
         parts = line.strip().split()
-        if len(parts) != 5:
+        # YOLO Box: 5 parts; YOLO Seg/OBB: >5 parts
+        if len(parts) < 5:
             corrupted = True
             continue
         try:
+            # Ensure all parts are numeric
             floats = [float(x) for x in parts]
             cleaned.append(" ".join(map(str, floats)))
         except ValueError:

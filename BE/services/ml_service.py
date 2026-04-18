@@ -133,6 +133,8 @@ class MLService:
 
     def run_training(self, epochs=100, imgsz=960, model="yolov8n.pt"):
         """Run the active learning pipeline with streaming output."""
+        self.logs.clear()
+        self.log_message("🚀 NEURAL ENGINE IGNITION: Preparing refinement pipeline...")
         cmd = [
             sys.executable, str(ML_PIPELINE), 
             "--no-interactive", 
@@ -233,40 +235,34 @@ class MLService:
         """
         uploads_file = ML_DIR / "data" / "test_images" / filename
         
-        # Target directories (merged dataset)
-        train_images_dir = ML_DIR / "data" / "yolo_merged" / "images" / "train"
-        train_labels_dir = ML_DIR / "data" / "yolo_merged" / "labels" / "train"
-        
-        train_images_dir.mkdir(parents=True, exist_ok=True)
-        train_labels_dir.mkdir(parents=True, exist_ok=True)
+        # Target directory for active learning refinement
+        active_labels_dir = ML_DIR / "active_labels"
+        active_labels_dir.mkdir(parents=True, exist_ok=True)
         
         if not uploads_file.exists():
             raise FileNotFoundError(f"Source file {filename} not found in uploads")
 
-        # Move image
-        target_image_path = train_images_dir / filename
-        shutil.copy2(uploads_file, target_image_path) 
-        # Note: Copy instead of move so we don't break the frontend 'current' view immediately if they refresh? 
-        # Actually move is cleaner for 'inbox' style, but let's copy to be safe.
+        # Image stays in test_images; boost_merge_labels.py will pick it up and move it to yolo_merged.
         
         # Create Label File (YOLO format: class_id x_center y_center width height)
         # detections items: { class, box: [x1,y1,x2,y2] }
         # Need to map class names to IDs.
         # We assume self.model.names exists.
         
-        label_path = train_labels_dir / f"{Path(filename).stem}.txt"
+        label_path = active_labels_dir / f"{Path(filename).stem}.txt"
         
         if not self.model:
             self.load_model()
             
-        # Create reverse map for names
-        name_to_id = {v: k for k, v in self.model.names.items()}
+        # Create case-insensitive reverse map for names
+        name_to_id = {str(v).lower(): k for k, v in self.model.names.items()}
+        self.log_message(f"DEBUG: Model Names: {self.model.names}")
         
         with label_path.open("w") as f:
             for det in detections:
-                class_name = det['class']
+                class_name = str(det['class']).lower()
                 if class_name not in name_to_id:
-                    logger.warning(f"Unknown class {class_name}, skipping")
+                    self.log_message(f"Unknown class {class_name}, skipping. Avail: {list(name_to_id.keys())}")
                     continue
                 
                 cid = name_to_id[class_name]
@@ -295,6 +291,68 @@ class MLService:
                     f.write(f"{cid} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}\n")
                 
         self.log_message(f"Saved annotation for {filename} with {len(detections)} labels")
+        return True
+
+
+    def get_staged_stats(self):
+        """Count images and classes currently in yolo_merged (staged for next train)."""
+        merged_images = ML_DIR / "data" / "yolo_merged" / "images" / "train"
+        merged_labels = ML_DIR / "data" / "yolo_merged" / "labels" / "train"
+        
+        images = list(merged_images.glob("*")) if merged_images.exists() else []
+        labels = list(merged_labels.glob("*.txt")) if merged_labels.exists() else []
+        
+        classes = set()
+        for lab in labels:
+            if lab.stat().st_size > 0:
+                try:
+                    for line in lab.read_text().splitlines():
+                        if line.strip():
+                            classes.add(line.split()[0])
+                except: pass
+
+        return {
+            "images": len(images),
+            "classes": len(classes)
+        }
+
+
+    def get_staged_stats(self):
+        """Count images and classes currently in yolo_merged (staged for next train)."""
+        merged_images = ML_DIR / "data" / "yolo_merged" / "images" / "train"
+        merged_labels = ML_DIR / "data" / "yolo_merged" / "labels" / "train"
+        
+        images = list(merged_images.glob("*")) if merged_images.exists() else []
+        labels = list(merged_labels.glob("*.txt")) if merged_labels.exists() else []
+        
+        classes = set()
+        for lab in labels:
+            if lab.stat().st_size > 0:
+                try:
+                    for line in lab.read_text().splitlines():
+                        if line.strip():
+                            classes.add(line.split()[0])
+                except: pass
+
+        return {
+            "images": len(images),
+            "classes": len(classes)
+        }
+
+    def flush_staged(self):
+        """Wipe the staged images and labels in yolo_merged."""
+        merged_images = ML_DIR / "data" / "yolo_merged" / "images" / "train"
+        merged_labels = ML_DIR / "data" / "yolo_merged" / "labels" / "train"
+        
+        if merged_images.exists():
+            shutil.rmtree(merged_images)
+            merged_images.mkdir(parents=True, exist_ok=True)
+            
+        if merged_labels.exists():
+            shutil.rmtree(merged_labels)
+            merged_labels.mkdir(parents=True, exist_ok=True)
+            
+        self.log_message("🧼 Staged data flushed successfully.")
         return True
 
 # Singleton instance

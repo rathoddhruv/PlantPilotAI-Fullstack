@@ -219,33 +219,32 @@ export class ReviewComponent implements OnInit, OnDestroy {
                 this.reviewQueue.updateCurrentItem({ status: 'accepted' });
             }
 
-            // Fire background tasks
+            // Save Annotation for the current image first
             const w = this.image.width || 0;
             const h = this.image.height || 0;
+            const stats = this.queueStats;
+            const isLast = stats.current >= stats.total;
             
             this.api.saveAnnotation(filename, validDetections, w, h).subscribe({
-               next: () => console.log("[Review] Background save complete."),
-               error: (e) => console.error("[Review] Background save failed", e)
+               next: () => {
+                   console.log("[Review] Annotation save complete.");
+                   if (isLast) {
+                       console.log("[Review] Final image approved. Triggering Batch Refinement.");
+                       this.api.triggerTraining().subscribe();
+                       this.reviewQueue.clear();
+                       this.router.navigate(['/upload']);
+                   } else {
+                       this.isLoading = false;
+                       this.showToast('Image saved. Advancing...');
+                       this.reviewQueue.next();
+                   }
+               },
+               error: (e) => {
+                   console.error("[Review] Annotation save failed", e);
+                   this.isLoading = false;
+                   this.showToast('Save Failed!');
+               }
             });
-            this.api.triggerTraining().subscribe();
-
-            // Force Exit Logic
-            const stats = this.queueStats;
-            console.log(`[Review] Queue state: ${stats.current}/${stats.total}`);
-
-            if (stats.current >= stats.total) {
-                console.log("[Review] All images done. Returning home.");
-                this.toast.show("Model Refinement Initiated!", "success");
-                
-                // Final Redirection Impulse
-                this.router.navigate(['/upload']).then(success => {
-                    if (!success) window.location.href = '/upload';
-                });
-            } else {
-                this.isLoading = false;
-                this.showToast('Project refined. Next image...');
-                this.reviewQueue.next();
-            }
 
         } catch (error) {
             console.error("[Review] Critical crash during accept, forcing exit:", error);

@@ -36,7 +36,7 @@
 
       <!-- Log Panel Content (Only visible if isConsoleVisible) -->
       <div *ngIf="isConsoleVisible" class="h-[260px]">
-        <app-log-panel></app-log-panel>
+        <app-log-panel [isActive]="isConsoleVisible"></app-log-panel>
       </div>
     </div>
   </main>

@@ -10,6 +10,8 @@ from config_loader import (
     MODEL_PATH as CONFIG_MODEL_PATH,
 )
 import torch
+# Disable emojis for Windows terminal compatibility
+USE_EMOJI = False
 from multiprocessing import freeze_support
 
 # Constants for absolute pathing
@@ -273,20 +275,21 @@ if __name__ == '__main__':
     
     # === Step 2: get latest trained model path ===
     def get_latest_model_path(base_dir="runs/detect"):
-        # search under ml/runs/detect only
+        # search recursively under ml/runs/detect to find any best.pt
         base_dir = Path(base_dir)
         if not base_dir.exists():
-            raise FileNotFoundError(f"runs folder missing at {base_dir.resolve()}")
-        run_dirs = sorted(
-            [d for d in base_dir.iterdir() if d.is_dir()],
-            key=lambda x: x.stat().st_mtime,
-            reverse=True,
-        )
-        for run_dir in run_dirs:
-            best = run_dir / "weights/best.pt"
-            if best.exists():
-                return best
-        raise FileNotFoundError("No valid best.pt found in any run folder.")
+            base_dir.mkdir(parents=True, exist_ok=True)
+            
+        all_models = list(base_dir.rglob("best.pt"))
+        if not all_models:
+             # Fallback: check if the user provided a model to start with
+             if args.model and Path(args.model).exists():
+                 return Path(args.model)
+             raise FileNotFoundError("No valid best.pt found in any run folder.")
+        
+        # Sort by modification time to get the truly latest model
+        all_models.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        return all_models[0]
     
     
     
@@ -325,24 +328,31 @@ if __name__ == '__main__':
     
     # === Step 6: validate labels and images ===
     valid_labels = [f for f in merged_labels.glob("*.txt") if f.stat().st_size > 0]
-    print(f"Valid label files found: {len(valid_labels)}")
+    print(f"Total potential labels found: {len(valid_labels)}")
     
-    unmatched_labels = []
+    final_train_pairs = []
     for label_file in valid_labels:
-        image_file = merged_images / (label_file.stem + ".jpg")
-        if not image_file.exists():
-            unmatched_labels.append(label_file.name)
+        # Check for multiple extensions
+        found_img = None
+        for ext in ['.jpg', '.png', '.jpeg', '.JPG']:
+            img_cand = merged_images / (label_file.stem + ext)
+            if img_cand.exists():
+                found_img = img_cand
+                break
+        
+        if found_img:
+            final_train_pairs.append((found_img, label_file))
+        else:
+             print(f"[WARN] Skipping {label_file.name} - No matching image found.")
     
-    if unmatched_labels:
-        print("Some labels do not have matching images:")
-        for f in unmatched_labels:
-            print(f"  - {f}")
-        print("Please fix missing image files before training.")
+    if len(final_train_pairs) == 0:
+        print("[FAIL] No valid image+label pairs found. Training aborted.")
         sys.exit(1)
     
-    if len(valid_labels) == 0:
-        print("No valid label files found. Training skipped.")
-        sys.exit(1)
+    print(f"[OK] Ready for refinement with {len(final_train_pairs)} validated pairs.")
+    # Update train_images and train_labels counts for the next steps
+    train_images = [p[0] for p in final_train_pairs]
+    train_labels = [p[1] for p in final_train_pairs]
     
     # remove old backup txt files if left
     for txt_file in merged_labels.glob("*.bak"):

@@ -4,7 +4,9 @@ import { PredictionResult } from './api.service';
 
 export interface ReviewItem {
     id: string;
-    file: File;
+    file?: File;
+    filename?: string;
+    remoteUrl?: string;
     status: 'pending' | 'accepted' | 'rejected' | 'analyzing' | 'error';
     prediction?: PredictionResult;
     error?: string;
@@ -31,7 +33,18 @@ export class ReviewQueueService {
         this.queue = Array.from(files).map(f => ({
             id: Math.random().toString(36).substring(7),
             file: f,
-            status: 'pending'
+            status: 'pending' as const
+        }));
+        this.currentIndex = 0;
+        this.emitState();
+    }
+
+    setRemoteFiles(filenames: string[]) {
+        this.queue = filenames.map(name => ({
+            id: Math.random().toString(36).substring(7),
+            filename: name,
+            remoteUrl: `http://localhost:8000/api/v1/inference/image/${name}`,
+            status: 'pending' as const
         }));
         this.currentIndex = 0;
         this.emitState();
@@ -41,7 +54,7 @@ export class ReviewQueueService {
         const newItems: ReviewItem[] = Array.from(files).map(f => ({
             id: Math.random().toString(36).substring(7),
             file: f,
-            status: 'pending'
+            status: 'pending' as const
         }));
         this.queue.push(...newItems);
 
