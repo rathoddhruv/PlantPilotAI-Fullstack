@@ -8,95 +8,99 @@ import { ApiService, RunInfo } from '../../../core/services/api.service';
   imports: [CommonModule],
   template: `
     <div class="w-full bg-gray-900 border-r border-gray-800 p-6 flex flex-col h-full text-gray-300">
-      <!-- Header -->
       <div class="mb-8">
-        <h2 class="text-xl font-bold text-white mb-1">Project Status</h2>
-        <p class="text-xs text-gray-500 font-mono">System & Model Health</p>
+        <h2 class="text-xl font-black text-white mb-1 uppercase tracking-tighter italic whitespace-nowrap">TrainFlow Vision</h2>
+        <p class="text-[10px] text-gray-500 font-mono font-bold uppercase tracking-widest">Global Training & Refine Hub</p>
       </div>
 
-      <!-- System Info -->
-      <div class="mb-8 bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-        <h3 class="text-sm font-bold text-gray-400 uppercase mb-3">System</h3>
-        <div class="space-y-2 text-sm">
-          <div class="flex justify-between">
-            <span>Status</span>
-            <span class="text-green-400 font-mono">ONLINE</span>
+      <div class="mb-8 bg-gray-800/40 rounded-2xl p-4 border border-gray-700/50">
+        <div class="flex items-center gap-3 mb-4">
+           <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+           <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Environment Live</h3>
+        </div>
+        <div class="space-y-2 text-xs">
+          <div class="flex justify-between items-center">
+            <span class="text-gray-500 font-bold uppercase text-[9px]">Acceleration</span>
+            <span [class.text-indigo-400]="sysInfo?.cuda_available" 
+                  [class.text-orange-500]="!sysInfo?.cuda_available"
+                  [class.animate-pulse]="!sysInfo?.cuda_available"
+                  class="font-mono font-bold">{{ sysInfo?.cuda_available ? 'CUDA ⚡' : 'CPU 🐢' }}</span>
           </div>
-          <div class="flex justify-between">
-            <span>CUDA</span>
-            <span [class.text-green-400]="sysInfo?.cuda_available" [class.text-gray-500]="!sysInfo?.cuda_available" class="font-mono">
-              {{ sysInfo?.cuda_available ? 'ON' : 'OFF' }}
-            </span>
+          <div *ngIf="sysInfo && !sysInfo.cuda_available" class="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+             <p class="text-[8px] text-red-400 font-black uppercase tracking-widest text-center">⚠️ GPU NOT DETECTED - TRAINING WILL BE SLOW</p>
           </div>
-          <div class="flex justify-between">
-            <span>Device</span>
-            <span class="text-blue-300 font-mono text-xs">{{ sysInfo?.device_name || 'Loading...' }}</span>
+          <div class="flex justify-between items-center">
+            <span class="text-gray-500 font-bold uppercase text-[9px]">Compute Node</span>
+            <span class="text-blue-300 font-mono text-[9px] font-bold truncate max-w-[100px]">{{ sysInfo?.device_name || 'Loading...' }}</span>
           </div>
         </div>
       </div>
 
-      <!-- Stats -->
-      <div class="mb-8">
-        <h3 class="text-sm font-bold text-gray-400 uppercase mb-3">Metrics</h3>
-        <div class="grid grid-cols-2 gap-4">
-          <div class="bg-gray-800 rounded-lg p-3 text-center">
-            <div class="text-2xl font-bold text-white">{{ runs.length }}</div>
-            <div class="text-xs text-gray-500">Versions</div>
-          </div>
-          <div class="bg-gray-800 rounded-lg p-3 text-center">
-            <div class="text-2xl font-bold text-green-400">{{ retrainCount }}</div>
-            <div class="text-xs text-gray-500">Retrains</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- History / Rollback -->
-      <div class="flex-1 overflow-y-auto">
-        <h3 class="text-sm font-bold text-gray-400 uppercase mb-3 sticky top-0 bg-gray-900 py-2">History</h3>
-        <div class="space-y-3">
-          <div *ngFor="let run of runs" class="p-3 rounded-lg border transition-all"
-               [class.border-green-500]="run.kind === 'current'"
-               [class.bg-green-900_10]="run.kind === 'current'"
-               [class.border-gray-700]="run.kind !== 'current'"
-               [class.bg-gray-800]="run.kind !== 'current'">
+      <div class="flex-1 overflow-y-auto pr-1">
+        <h3 class="text-[10px] font-black text-gray-500 uppercase mb-4 tracking-widest border-b border-gray-800 pb-2">Neural History</h3>
+        
+        <div class="space-y-2">
+          <div *ngFor="let run of runs" class="rounded-xl border transition-all"
+               [ngClass]="run.kind === 'current' ? 'border-indigo-500/30 bg-indigo-500/5' : 'border-gray-800 bg-gray-800/30'">
             
-            <div class="flex justify-between items-start mb-1">
-              <span class="font-mono text-xs font-bold" [class.text-green-400]="run.kind === 'current'">
-                {{ run.name }}
-              </span>
-              <span *ngIf="run.kind === 'current'" class="text-[10px] bg-green-500 text-black px-1.5 rounded font-bold">ACTIVE</span>
+            <div class="flex items-center justify-between p-3 cursor-pointer group" (click)="toggleRun(run.name)">
+               <div class="flex items-center gap-2">
+                  <div class="flex flex-col">
+                    <span class="text-[9px] font-mono font-black text-indigo-400/70 uppercase tracking-tighter">{{ run.name }}</span>
+                    <span class="text-[10px] font-black tracking-widest text-white/90">{{ run.mtime * 1000 | date:'MMM d h:mm a' }}</span>
+                  </div>
+                  <span *ngIf="run.kind === 'current'" class="text-[7px] bg-indigo-500 text-white px-1.5 py-0.5 rounded-full font-black uppercase">Live</span>
+               </div>
+               
+               <div class="flex items-center gap-3">
+                 <button *ngIf="run.kind !== 'current'" (click)="$event.stopPropagation(); rollback(run.name)"
+                         class="px-2 py-1 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded text-[8px] font-black uppercase transition-all whitespace-nowrap">
+                   RESTORE
+                 </button>
+                 <span class="text-gray-600 text-[10px] transition-transform" [class.rotate-180]="expandedRuns.has(run.name)">▼</span>
+               </div>
             </div>
-            
-            <p class="text-xs text-gray-500 mb-2">Updated: {{ run.mtime * 1000 | date:'short' }}</p>
-            
-            <button *ngIf="run.kind !== 'current'" (click)="rollback(run.name)" 
-                    class="w-full py-1 text-xs border border-gray-600 rounded hover:bg-gray-700 text-gray-400 transition-colors">
-              Rollback to this
-            </button>
+
+            <div *ngIf="expandedRuns.has(run.name)" class="px-3 pb-4 pt-0 border-t border-gray-800/50">
+               <div class="grid grid-cols-1 gap-2 py-3">
+                  <div class="flex justify-between items-end border-b border-gray-800/20 pb-1">
+                     <span class="text-[9px] font-bold text-gray-400 uppercase">mAP</span>
+                     <span class="text-xs font-mono font-black text-indigo-400">{{ (run.metrics.map50 || 0).toFixed(2) }}</span>
+                  </div>
+                  <div class="flex justify-between items-end border-b border-gray-800/20 pb-1">
+                     <span class="text-[9px] font-bold text-gray-400 uppercase">Prec</span>
+                     <span class="text-xs font-mono font-black text-white">{{ (run.metrics.precision || 0).toFixed(2) }}</span>
+                  </div>
+                  <div class="flex justify-between items-end border-b border-gray-800/20 pb-1">
+                     <span class="text-[9px] font-bold text-gray-400 uppercase">Rec</span>
+                     <span class="text-xs font-mono font-black text-white">{{ (run.metrics.recall || 0).toFixed(2) }}</span>
+                  </div>
+               </div>
+            </div>
           </div>
         </div>
-      <!-- Danger Zone -->
-      <div class="mt-8 pt-6 border-t border-gray-800 space-y-2">
-        <h3 class="text-sm font-bold text-red-500/80 uppercase mb-3 px-1">Maintenance</h3>
+      </div>
+
+      <div class="mt-auto pt-6 border-t border-gray-800 space-y-2">
+        <h3 class="text-[9px] font-black text-gray-600 uppercase tracking-widest px-1 mb-2">System Maintenance</h3>
         <button (click)="resetProject(true)" 
-                class="w-full py-2.5 text-xs font-bold border border-blue-900/30 bg-blue-900/10 rounded-xl hover:bg-blue-900/30 text-blue-400 transition-all flex items-center justify-center gap-2">
-          <span>📦</span> ARCHIVE & RESET
+                class="w-full py-2.5 bg-gray-800/30 border border-gray-700/50 rounded-xl flex items-center justify-center gap-2 text-[8px] font-black uppercase tracking-widest text-gray-500 hover:text-blue-400 hover:bg-blue-400/5 transition-all">
+          <span>📦</span> Archive Project
         </button>
         <button (click)="resetProject(false)" 
-                class="w-full py-2.5 text-xs font-bold border border-red-900/50 bg-red-900/10 rounded-xl hover:bg-red-900/30 text-red-400 transition-all flex items-center justify-center gap-2">
-          <span>🔥</span> FULL ENVIRONMENT WIPE
+                class="w-full py-2.5 bg-gray-800/30 border border-gray-700/50 rounded-xl flex items-center justify-center gap-2 text-[8px] font-black uppercase tracking-widest text-gray-500 hover:text-red-500 hover:bg-red-500/5 transition-all">
+          <span>🔥</span> Full Environment Wipe
         </button>
-        <p class="text-[9px] text-gray-600 mt-2 text-center uppercase tracking-tighter">Wipe is irreversible</p>
       </div>
-
     </div>
   `
 })
 export class DashboardSidebarComponent implements OnInit {
   @Input() runs: RunInfo[] = [];
-  @Input() manifest: any[] = []; // Used to calc stats
-
-  sysInfo: any = null;
+  @Input() manifest: any[] = [];
+  
+  public sysInfo: any = null;
+  public expandedRuns = new Set<string>();
 
   constructor(private api: ApiService) { }
 
@@ -106,31 +110,30 @@ export class DashboardSidebarComponent implements OnInit {
     });
   }
 
-  get retrainCount(): number {
-    return this.manifest ? this.manifest.filter(e => e.event === 'active_learning_train').length : 0;
+  public toggleRun(name: string) {
+    if (this.expandedRuns.has(name)) {
+      this.expandedRuns.delete(name);
+    } else {
+      this.expandedRuns.add(name);
+    }
   }
 
-  rollback(runName: string) {
-    if (!confirm(`Are you sure you want to rollback to ${runName}?`)) return;
+  public rollback(runName: string) {
+    if (!confirm(`Rollback to ${runName}?`)) return;
     this.api.rollback(runName).subscribe({
-      next: () => alert('Rollback successful. Model updated.'),
-      error: (e) => alert('Rollback failed: ' + e.message)
+      next: () => alert('Rollback successful.'),
+      error: (e) => alert('Error: ' + e.message)
     });
   }
 
-  resetProject(archive: boolean = true) {
+  public resetProject(archive: boolean = true) {
     const msg = archive 
-      ? "SOFT RESET: This will archive your current work and start fresh. Backups will be kept. Continue?"
-      : "FULL WIPE: This will PERMANENTLY delete everything (runs, datasets, models). NO BACKUP. Continue?";
-    
+      ? "Archive project and start fresh?" 
+      : "PERMANENT WIPE: Delete all models and data?";
     if (!confirm(msg)) return;
-    
     this.api.resetProject(archive).subscribe({
-      next: () => {
-        alert(archive ? 'Project archived. Starting fresh.' : 'Environment wiped.');
-        window.location.reload();
-      },
-      error: (e) => alert('Operation failed: ' + e.message)
+      next: () => window.location.reload(),
+      error: (e) => alert('Error: ' + e.message)
     });
   }
 }

@@ -62,6 +62,9 @@ export class UploadComponent implements OnInit, OnDestroy {
     isResizingSidebar = false;
     isResizingConsole = false;
 
+    // Hardware State
+    public cudaAvailable = true; 
+
     constructor(
         private api: ApiService,
         private router: Router,
@@ -166,6 +169,17 @@ export class UploadComponent implements OnInit, OnDestroy {
             },
             error: () => {
                 this.currentModelName = 'yolov8s.pt (Fallback)';
+            }
+        });
+
+        // 4. Fetch System/Hardware Info
+        this.api.getSystemInfo().subscribe({
+            next: (res: any) => {
+                this.cudaAvailable = res.cuda_available;
+            },
+            error: () => {
+                this.cudaAvailable = false;
+                this.addLog("⚠️ Hardware Status Unknown: Connection to backend node lost.");
             }
         });
     }

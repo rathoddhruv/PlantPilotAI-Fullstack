@@ -2,6 +2,7 @@ import sys
 import subprocess
 import shutil
 from pathlib import Path
+from datetime import datetime
 from ultralytics import YOLO
 from BE.settings import ML_DIR, IMPORT_ZIP_SCRIPT, ML_PIPELINE
 
@@ -88,6 +89,10 @@ class MLService:
             newest_weight = max(all_weights, key=lambda p: p.stat().st_mtime)
             self.log_message(f"🧠 Loading trained brain: {newest_weight.parent.parent.name}")
             self.model = YOLO(str(newest_weight))
+            import torch
+            if torch.cuda.is_available():
+                self.model.to('cuda')
+                self.log_message("⚡ GPU Acceleration Activated (CUDA)")
             return
 
         # Fallback to base models
@@ -97,6 +102,9 @@ class MLService:
             if path.exists():
                 self.log_message(f"ℹ️ Training not run yet. Using base model: {opt}")
                 self.model = YOLO(str(path))
+                import torch
+                if torch.cuda.is_available():
+                    self.model.to('cuda')
                 return
 
         self.log_message("⚠️ CRITICAL: No model found! ZIP upload required.")

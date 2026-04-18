@@ -8,18 +8,29 @@
     <div class="flex-1 relative z-10 flex flex-col items-center justify-center p-6 overflow-y-auto"
         (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
 
+        <!-- GPU Warning Banner -->
+        <div *ngIf="!cudaAvailable" 
+             class="w-full max-w-4xl mb-6 bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-center justify-between animate-pulse">
+             <div class="flex items-center gap-4">
+                <span class="text-2xl">🐢</span>
+                <div>
+                   <h3 class="text-xs font-black text-red-400 uppercase tracking-widest leading-none mb-1">Acceleration Alert: Legacy Mode</h3>
+                   <p class="text-[10px] text-red-500/70 font-bold uppercase tracking-tighter">GPU Not Detected. Training performance will be significantly reduced.</p>
+                </div>
+             </div>
+             <div class="px-3 py-1 bg-red-500/20 rounded-full border border-red-500/40 text-[9px] font-black text-red-400 uppercase tracking-widest">
+                CPU ACTIVE
+             </div>
+        </div>
+
         <!-- Main Workspace Card -->
         <div class="w-full max-w-4xl bg-slate-800/40 backdrop-blur-2xl border border-slate-700/50 rounded-3xl p-10 shadow-2xl transition-all"
             [ngClass]="isDragOver ? 'border-indigo-500 bg-slate-800/60' : ''">
 
             <!-- Logo & Header -->
             <div class="text-center mb-10">
-                <div
-                    class="text-5xl mb-4 transform hover:scale-110 transition-transform duration-500 cursor-default inline-block">
-                    🌿</div>
-                <h1
-                    class="text-4xl font-black tracking-tight bg-gradient-to-r from-indigo-400 via-white to-emerald-400 bg-clip-text text-transparent mb-3">
-                    PlantPilotAI</h1>
+                <div class="text-5xl mb-4 transform hover:scale-110 transition-transform duration-500 cursor-default inline-block">🌊</div>
+                <h1 class="text-4xl font-black tracking-tight bg-gradient-to-r from-sky-400 via-white to-indigo-400 bg-clip-text text-transparent mb-3 uppercase italic">TrainFlow Vision</h1>
                 <div class="flex items-center justify-center gap-3">
                     <div class="px-4 py-1 rounded-full bg-slate-900/60 border border-slate-700 flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -59,15 +70,26 @@
                 </div>
             </div>
 
-            <!-- Status -->
+            <!-- Status (Process Updates Only) -->
             <div *ngIf="status !== 'idle'"
-                class="mb-10 animate-fade-in text-center p-8 bg-slate-900/40 rounded-3xl border border-slate-700">
-                <div class="relative h-1.5 bg-slate-800 rounded-full mb-6 overflow-hidden max-w-md mx-auto">
-                    <div class="absolute top-0 left-0 h-full bg-gradient-to-r from-indigo-500 via-white to-emerald-500 transition-all duration-700"
+                class="mb-10 animate-fade-in text-center p-10 bg-slate-900/60 rounded-[3rem] border-2 border-indigo-500/20 shadow-[0_0_50px_rgba(79,70,229,0.1)] relative overflow-hidden">
+                <!-- Background Pulse -->
+                <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-transparent to-emerald-500/5 animate-pulse-slow"></div>
+
+                <div class="relative h-2 bg-slate-800 rounded-full mb-8 overflow-hidden max-w-md mx-auto shadow-inner">
+                    <div class="absolute top-0 left-0 h-full bg-gradient-to-r from-sky-400 via-white to-indigo-400 transition-all duration-1000 shadow-[0_0_15px_rgba(255,255,255,0.4)]"
                         [style.width.%]="progressPercent"></div>
                 </div>
-                <h2 class="text-xl font-bold mb-1 uppercase tracking-tighter">{{ statusTitle }}</h2>
-                <p class="text-indigo-400 text-xs font-black animate-pulse tracking-wide">{{ statusMessage }}</p>
+
+                <div class="space-y-2 relative z-10">
+                    <h2 class="text-3xl font-black italic tracking-tighter uppercase text-white mb-2">
+                        {{ status === 'training' ? 'Forging Neural Engine' : statusTitle }}
+                    </h2>
+                    <div class="flex items-center justify-center gap-3">
+                        <span class="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span>
+                        <p class="text-indigo-400 text-xs font-mono font-black uppercase tracking-[0.2em]">{{ statusMessage }}</p>
+                    </div>
+                </div>
             </div>
 
             <!-- Main Interaction Grid -->
@@ -110,16 +132,6 @@
                                 <option value="yolov10n.pt">YOLOv10 Nano</option>
                             </select>
                         </div>
-                        <div class="col-span-2 pt-2">
-                            <label class="flex items-center justify-between cursor-pointer">
-                                <span class="text-[10px] font-bold text-slate-300 uppercase italic">Wipe
-                                    Environment?</span>
-                                <input type="checkbox" [(ngModel)]="isFreshStart" class="sr-only peer">
-                                <div
-                                    class="w-10 h-5 bg-slate-900 rounded-full peer peer-checked:bg-red-500 relative transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5 shadow-lg">
-                                </div>
-                            </label>
-                        </div>
                     </div>
                 </div>
 
@@ -147,15 +159,6 @@
                     </div>
                     <input type="file" multiple #fileInput (change)="onFileSelected($event)" class="hidden">
                 </div>
-            </div>
-
-            <!-- Footer Reset -->
-            <div *ngIf="status === 'idle'"
-                class="mt-12 flex items-center justify-center border-t border-slate-800/40 pt-8">
-                <button (click)="openProjectReset()"
-                    class="group flex items-center gap-2 text-[10px] font-black text-slate-600 hover:text-red-400 transition-all uppercase tracking-widest outline-none">
-                    <span class="opacity-50 group-hover:opacity-100 italic transition-opacity">🔥</span> RESET PROJECT
-                </button>
             </div>
         </div>
 
