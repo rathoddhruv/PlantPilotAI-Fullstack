@@ -392,33 +392,28 @@ if __name__ == '__main__':
         if TRAIN_STABLE.exists():
             shutil.rmtree(TRAIN_STABLE, ignore_errors=True)
     
-        train_args = [
-            sys.executable, "-m", "ultralytics", 
-            "yolo",
-            f"task={task_type}",
-            "mode=train",
-            f"model={MODEL_PATH}",
-            f"data={dataset_yaml}",
-            f"imgsz={args.imgsz}",
-            "device=0",
-            f"project={RUNS_DETECT}",  # USE ABSOLUTE PATH
-            "name=train",
-            "exist_ok=True",
-            "resume=False",
-            "val=False",
-            f"epochs={args.epochs}",
-            "lr0=0.005",
-            "amp=False",
-        ]
-    
         print(f"Running YOLO training (Fine-tuning from {MODEL_PATH})...")
-        result = subprocess.run(
-            train_args,
-            check=False
-        )
-    
-        if result.returncode != 0:
-            print("YOLO training failed to execute properly.")
+        model = YOLO(str(MODEL_PATH))
+        device = get_device()
+        
+        try:
+            results = model.train(
+                task=task_type,
+                data=str(dataset_yaml),
+                imgsz=args.imgsz,
+                device=device,
+                project=str(RUNS_DETECT),
+                name="train",
+                exist_ok=True,
+                resume=False,
+                val=False,
+                epochs=args.epochs,
+                lr0=0.005,
+                amp=False
+            )
+            print("YOLO refinement training completed successfully")
+        except Exception as e:
+            print(f"YOLO refinement training failed: {e}")
             sys.exit(1)
     
         # after training, backup old model and update MODEL_PATH with new best
@@ -457,24 +452,22 @@ if __name__ == '__main__':
     eval_dir.mkdir(parents=True, exist_ok=True)
     
     if CONFIG_MODEL_PATH.exists():
-        print(f"Evaluating {len(train_images)} images using updated model...")
-        eval_args = [
-            "yolo",
-            "task=detect",
-            "mode=predict",
-            f"model={CONFIG_MODEL_PATH}",
-            f"source={merged_images}",
-            "imgsz=960",
-            "conf=0.25",
-            "iou=0.5",
-            f"device={get_device()}",
-            "show=False",
-            "save=True",
-            "save_txt=False",
-            "project=eval_output",
-            "name=post_active_learning",
-            "exist_ok=True",
-        ]
-        subprocess.run(eval_args)
+        print(f"Evaluating images using updated model...")
+        model = YOLO(str(CONFIG_MODEL_PATH))
+        try:
+            results = model.predict(
+                source=str(merged_images),
+                imgsz=960,
+                conf=0.25,
+                iou=0.5,
+                device=get_device(),
+                save=True,
+                project=str(eval_dir),
+                name="post_active_learning",
+                exist_ok=True
+            )
+            print("Evaluation completed successfully.")
+        except Exception as e:
+            print(f"Evaluation failed: {e}")
     else:
         print(f"Skipping evaluation because model not found at {CONFIG_MODEL_PATH}")

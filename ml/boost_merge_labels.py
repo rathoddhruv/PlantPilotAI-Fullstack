@@ -48,14 +48,42 @@ active_files = list(ACTIVE_LABEL_DIR.glob("*.txt"))
 copied_images = 0
 for label_path in active_files:
     shutil.copy(label_path, merged_labels / label_path.name)
-    for ext in [".jpg", ".jpeg", ".png"]:
+    found = False
+    for ext in [".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG"]:
         image_path = TEST_IMAGE_FOLDER / f"{label_path.stem}{ext}"
         if image_path.exists():
             shutil.copy(image_path, merged_images / image_path.name)
-            image_path.unlink()
-            copied_images += 1
+            # Only unlink if both are successfully copied to merged folder
+            if (merged_labels / label_path.name).exists() and (merged_images / image_path.name).exists():
+                image_path.unlink()
+                label_path.unlink()
+                copied_images += 1
+                found = True
             break
-    label_path.unlink()
+    if not found:
+        print(f"[WARN] No image found for {label_path.name} in {TEST_IMAGE_FOLDER}")
+
+# === ORPHAN RECOVERY ===
+# If images are in TEST_IMAGE_FOLDER but labels are already in merged_labels,
+# copy them over now.
+for label_path in merged_labels.glob("*.txt"):
+    img_found_locally = False
+    # Check if image is already in merged_images
+    for ext in [".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG"]:
+        if (merged_images / f"{label_path.stem}{ext}").exists():
+            img_found_locally = True
+            break
+    
+    if not img_found_locally:
+        # Try to recover from TEST_IMAGE_FOLDER
+        for ext in [".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG"]:
+            recover_path = TEST_IMAGE_FOLDER / f"{label_path.stem}{ext}"
+            if recover_path.exists():
+                print(f"[RECOVERY] Reuniting orphan label {label_path.name} with image.")
+                shutil.copy(recover_path, merged_images / recover_path.name)
+                recover_path.unlink()
+                copied_images += 1
+                break
 
 # === COPY WRONG LABELS AS NEGATIVE IMAGES ===
 #

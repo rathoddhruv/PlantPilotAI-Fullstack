@@ -3,8 +3,14 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # === HELPERS (must be defined before use) ===
+ML_ROOT = Path(__file__).resolve().parent
+
 def get_path(name, fallback):
-    return Path(os.getenv(name, fallback))
+    val = os.getenv(name)
+    if val:
+        return Path(val).resolve()
+    # If using fallback, anchor to ML_ROOT
+    return (ML_ROOT / fallback).resolve()
 
 def get_float(name, fallback):
     return float(os.getenv(name, fallback))
@@ -13,7 +19,8 @@ def get_int(name, fallback):
     return int(os.getenv(name, fallback))
 
 # === LOAD ENV ===
-load_dotenv()
+# try to load .env from ML_ROOT
+load_dotenv(dotenv_path=ML_ROOT / ".env")
 
 # === ORIGINAL PATHS ===
 ORIGINAL_IMAGES = get_path("ORIGINAL_IMAGES", "data/yolo_dataset/images/train")
