@@ -2,7 +2,7 @@ task: detect
 mode: train
 model: runs\detect\archive\train_20260417_213912\weights\best.pt
 data: C:\Data\Projects\PlantPilotAI-Fullstack\ML\yolo_merged.yaml
-epochs: 40
+epochs: 1
 time: null
 patience: 100
 batch: 16

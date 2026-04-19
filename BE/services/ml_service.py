@@ -1,22 +1,29 @@
-import sys
-import subprocess
-import shutil
-from pathlib import Path
-from datetime import datetime
-from ultralytics import YOLO
-from BE.settings import ML_DIR, IMPORT_ZIP_SCRIPT, ML_PIPELINE
-
 import logging
+import shutil
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+from ultralytics import YOLO
+
+from BE.settings import IMPORT_ZIP_SCRIPT, ML_DIR, ML_PIPELINE
+
 logger = logging.getLogger("plantpilot")
 
-from collections import deque
+import json
 import threading
+from collections import deque
+
 
 class MLService:
     def __init__(self):
         self.model = None
         self.model_path = None
         self.logs = deque(maxlen=500)
+        self.batch_queue = (
+            {}
+        )  # {filename: {detections, width, height, label_type, timestamp}}
         self.load_model()
 
     def log_message(self, msg: str):
@@ -29,7 +36,7 @@ class MLService:
     def reset_project(self, archive: bool = False):
         """Reset project data, optionally archiving instead of wiping."""
         self.log_message(f"Resetting project data (archive={archive})...")
-        
+
         # 1. Force release of model from memory
         self.model = None
         import gc
@@ -54,7 +61,7 @@ class MLService:
             ML_DIR / "temp",
             ML_DIR / "eval_output"
         ]
-        
+
         for p in targets:
             if p.exists():
                 try:
@@ -67,13 +74,13 @@ class MLService:
                         if p.exists(): shutil.rmtree(p)
                 except Exception as e:
                     self.log_message(f"❌ Error on {p.name}: {e}")
-        
+
         # 3. Re-create structures
         (ML_DIR / "data" / "test_images").mkdir(parents=True, exist_ok=True)
         (ML_DIR / "data" / "yolo_dataset").mkdir(parents=True, exist_ok=True)
         (ML_DIR / "data" / "yolo_merged").mkdir(parents=True, exist_ok=True)
         (ML_DIR / "datasets").mkdir(exist_ok=True)
-        
+
         # 4. Final reload
         self.load_model()
         self.log_message("Project reset successful.")
@@ -81,7 +88,7 @@ class MLService:
     def load_model(self):
         """Load the newest best.pt or fallback to base model."""
         runs_dir = ML_DIR / "runs" / "detect"
-        
+
         # Look for the absolute latest best.pt across ALL subfolders
         all_weights = list(runs_dir.rglob("weights/best.pt")) if runs_dir.exists() else []
         if all_weights:
@@ -114,7 +121,7 @@ class MLService:
         """Run the import script for a Label Studio ZIP."""
         cmd = [sys.executable, str(IMPORT_ZIP_SCRIPT), str(zip_path)]
         self.log_message(f"Importing Label Studio zip from {zip_path}")
-        
+
         # Run from ML directory since script uses relative paths
         result = subprocess.run(
             cmd, 
@@ -123,11 +130,11 @@ class MLService:
             encoding="utf-8",
             cwd=str(ML_DIR)  # CRITICAL: Run from ML directory
         )
-        
+
         if result.returncode != 0:
             self.log_message(f"Import failed: {result.stderr}")
             raise RuntimeError(f"Import failed: {result.stderr}")
-            
+
         self.log_message("Import completed.")
         return result.stdout
 
@@ -143,7 +150,7 @@ class MLService:
             f"--model={model}"
         ]
         self.log_message(f"Starting training command: {' '.join(cmd)}")
-        
+
         process = subprocess.Popen(
             cmd, 
             stdout=subprocess.PIPE, 
@@ -152,14 +159,14 @@ class MLService:
             encoding="utf-8",
             bufsize=1
         )
-        
+
         for line in process.stdout:
             line = line.strip()
             if line:
                 self.log_message(line)
-                
+
         process.wait()
-        
+
         if process.returncode != 0:
             self.log_message(f"Training failed with code {process.returncode}")
             raise RuntimeError(f"Training failed")
@@ -196,7 +203,7 @@ class MLService:
         if not results: return []
         result = results[0]
         detections = []
-        
+
         # Check for OBB (Oriented Bounding Boxes)
         if getattr(result, 'obb', None) is not None:
             for i in range(len(result.obb.cls)):
@@ -234,37 +241,37 @@ class MLService:
         Moves image from uploads to dataset and creates .txt label.
         """
         uploads_file = ML_DIR / "data" / "test_images" / filename
-        
+
         # Target directory for active learning refinement
         active_labels_dir = ML_DIR / "active_labels"
         active_labels_dir.mkdir(parents=True, exist_ok=True)
-        
+
         if not uploads_file.exists():
             raise FileNotFoundError(f"Source file {filename} not found in uploads")
 
         # Image stays in test_images; boost_merge_labels.py will pick it up and move it to yolo_merged.
-        
+
         # Create Label File (YOLO format: class_id x_center y_center width height)
         # detections items: { class, box: [x1,y1,x2,y2] }
         # Need to map class names to IDs.
         # We assume self.model.names exists.
-        
+
         label_path = active_labels_dir / f"{Path(filename).stem}.txt"
-        
+
         if not self.model:
             self.load_model()
-            
+
         # Create case-insensitive reverse map for names
         name_to_id = {str(v).lower(): k for k, v in self.model.names.items()}
         self.log_message(f"DEBUG: Model Names: {self.model.names}")
-        
+
         with label_path.open("w") as f:
             for det in detections:
                 class_name = str(det['class']).lower()
                 if class_name not in name_to_id:
                     self.log_message(f"Unknown class {class_name}, skipping. Avail: {list(name_to_id.keys())}")
                     continue
-                
+
                 cid = name_to_id[class_name]
                 if 'poly' in det and det['poly']:
                     # OBB/Seg Format: class x1 y1 x2 y2 ... (normalized)
@@ -273,35 +280,34 @@ class MLService:
                 else:
                     # Standard Box Format: class xc yc w h (normalized)
                     x1, y1, x2, y2 = det['box']
-                    
+
                     # Normalize to 0-1
                     dw = 1.0 / width
                     dh = 1.0 / height
-                    
+
                     w = x2 - x1
                     h = y2 - y1
                     cx = x1 + (w / 2)
                     cy = y1 + (h / 2)
-                    
+
                     cx *= dw
                     cy *= dh
                     w *= dw
                     h *= dh
-                    
+
                     f.write(f"{cid} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}\n")
-                
+
         self.log_message(f"Saved annotation for {filename} with {len(detections)} labels")
         return True
-
 
     def get_staged_stats(self):
         """Count images and classes currently in yolo_merged (staged for next train)."""
         merged_images = ML_DIR / "data" / "yolo_merged" / "images" / "train"
         merged_labels = ML_DIR / "data" / "yolo_merged" / "labels" / "train"
-        
+
         images = list(merged_images.glob("*")) if merged_images.exists() else []
         labels = list(merged_labels.glob("*.txt")) if merged_labels.exists() else []
-        
+
         classes = set()
         for lab in labels:
             if lab.stat().st_size > 0:
@@ -309,22 +315,22 @@ class MLService:
                     for line in lab.read_text().splitlines():
                         if line.strip():
                             classes.add(line.split()[0])
-                except: pass
+                except:
+                    pass
 
         return {
             "images": len(images),
             "classes": len(classes)
         }
 
-
     def get_staged_stats(self):
         """Count images and classes currently in yolo_merged (staged for next train)."""
         merged_images = ML_DIR / "data" / "yolo_merged" / "images" / "train"
         merged_labels = ML_DIR / "data" / "yolo_merged" / "labels" / "train"
-        
+
         images = list(merged_images.glob("*")) if merged_images.exists() else []
         labels = list(merged_labels.glob("*.txt")) if merged_labels.exists() else []
-        
+
         classes = set()
         for lab in labels:
             if lab.stat().st_size > 0:
@@ -332,7 +338,8 @@ class MLService:
                     for line in lab.read_text().splitlines():
                         if line.strip():
                             classes.add(line.split()[0])
-                except: pass
+                except:
+                    pass
 
         return {
             "images": len(images),
@@ -343,17 +350,145 @@ class MLService:
         """Wipe the staged images and labels in yolo_merged."""
         merged_images = ML_DIR / "data" / "yolo_merged" / "images" / "train"
         merged_labels = ML_DIR / "data" / "yolo_merged" / "labels" / "train"
-        
+
         if merged_images.exists():
             shutil.rmtree(merged_images)
             merged_images.mkdir(parents=True, exist_ok=True)
-            
+
         if merged_labels.exists():
             shutil.rmtree(merged_labels)
             merged_labels.mkdir(parents=True, exist_ok=True)
-            
+
         self.log_message("🧼 Staged data flushed successfully.")
         return True
+
+    # ========== BATCH PROCESSING QUEUE ==========
+
+    def queue_annotation(
+        self,
+        filename: str,
+        detections: list,
+        width: int,
+        height: int,
+        label_type: str = "correct",
+    ):
+        """
+        Add annotation to batch queue instead of training immediately.
+        label_type: "correct", "false_positive", "false_negative", "low_confidence"
+        """
+        if filename not in self.batch_queue:
+            self.batch_queue[filename] = {
+                "detections": detections,
+                "width": width,
+                "height": height,
+                "label_type": label_type,
+                "timestamp": datetime.now().isoformat(),
+            }
+            self.log_message(
+                f"📦 Queued annotation for {filename} (type: {label_type})"
+            )
+        else:
+            # Update existing
+            self.batch_queue[filename]["detections"] = detections
+            self.batch_queue[filename]["label_type"] = label_type
+            self.log_message(f"🔄 Updated queued annotation for {filename}")
+
+        return {
+            "status": "queued",
+            "queue_size": len(self.batch_queue),
+            "max_batch_size": 20,
+        }
+
+    def reject_annotation(self, filename: str):
+        """Remove annotation from queue (user rejected it)."""
+        if filename in self.batch_queue:
+            del self.batch_queue[filename]
+            self.log_message(f"❌ Removed {filename} from batch queue")
+
+        # Also remove from test_images if present
+        test_image = ML_DIR / "data" / "test_images" / filename
+        if test_image.exists():
+            test_image.unlink()
+            self.log_message(f"🗑️ Deleted {filename} from test_images")
+
+        return {"status": "rejected", "queue_size": len(self.batch_queue)}
+
+    def get_batch_status(self):
+        """Return current batch queue status."""
+        return {
+            "queue_size": len(self.batch_queue),
+            "max_batch_size": 20,
+            "items": [
+                {
+                    "filename": fn,
+                    "label_type": info["label_type"],
+                    "timestamp": info["timestamp"],
+                    "detection_count": len(info["detections"]),
+                }
+                for fn, info in list(self.batch_queue.items())
+            ],
+            "ready_to_train": len(self.batch_queue) > 0,
+        }
+
+    def accept_batch(self):
+        """Process all queued annotations and save to training dataset, then trigger training."""
+        if not self.batch_queue:
+            return {"status": "error", "message": "Batch queue is empty"}
+
+        saved_count = 0
+        try:
+            for filename, info in self.batch_queue.items():
+                detections = info["detections"]
+                width = info["width"]
+                height = info["height"]
+                label_type = info["label_type"]
+
+                # Handle different label types
+                if label_type == "false_positive":
+                    # For false positives, save empty label (no objects)
+                    test_image = ML_DIR / "data" / "test_images" / filename
+                    if test_image.exists():
+                        merged_images = (
+                            ML_DIR / "data" / "yolo_merged" / "images" / "train"
+                        )
+                        merged_labels = (
+                            ML_DIR / "data" / "yolo_merged" / "labels" / "train"
+                        )
+                        merged_images.mkdir(parents=True, exist_ok=True)
+                        merged_labels.mkdir(parents=True, exist_ok=True)
+
+                        # Copy image
+                        shutil.copy2(test_image, merged_images / filename)
+                        # Create empty label file (negative sample)
+                        label_path = merged_labels / f"{Path(filename).stem}.txt"
+                        label_path.write_text("")
+                        self.log_message(
+                            f"✓ Saved {filename} as negative sample (false positive)"
+                        )
+                        saved_count += 1
+                elif label_type == "false_negative":
+                    # For false negatives, save with user-corrected detections (high priority)
+                    self.save_annotation(filename, detections, width, height)
+                    saved_count += 1
+                else:
+                    # "correct" or "low_confidence" - save normally
+                    self.save_annotation(filename, detections, width, height)
+                    saved_count += 1
+
+            self.log_message(
+                f"✅ Batch accepted: {saved_count}/{len(self.batch_queue)} annotations saved"
+            )
+            self.batch_queue.clear()
+
+            return {
+                "status": "success",
+                "saved": saved_count,
+                "message": f"Batch of {saved_count} annotations processed and saved",
+            }
+        except Exception as e:
+            self.log_message(f"❌ Batch processing failed: {e}")
+            return {"status": "error", "message": str(e)}
+
 
 # Singleton instance
 ml_service = MLService()

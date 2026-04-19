@@ -1,19 +1,20 @@
 import shutil
 from pathlib import Path
+
 import yaml
 
 # Import configuration paths and helpers. In addition to the existing imports,
 # we bring in ``WRONG_LABEL_DIR`` so that we can handle false positive
 # detections recorded during manual review.
 from config_loader import (
+    ACTIVE_LABEL_DIR,
     CLASS_MAP_REVERSE,
+    MERGED_DATASET_ROOT,
     ORIGINAL_IMAGES,
     ORIGINAL_LABELS,
-    ACTIVE_LABEL_DIR,
     TEST_IMAGE_FOLDER,
-    MERGED_DATASET_ROOT,
-    YOLO_DATASET_YAML,
     WRONG_LABEL_DIR,
+    YOLO_DATASET_YAML,
 )
 
 merged_root = MERGED_DATASET_ROOT
@@ -24,18 +25,28 @@ merged_labels = merged_root / "labels/train"
 for path in [merged_images, merged_labels]:
     path.mkdir(parents=True, exist_ok=True)
 
-# === COPY ORIGINAL IMAGES AND LABELS ===
+# === COPY ORIGINAL IMAGES AND LABELS (ONLY NEW ONES) ===
 #
-# Start from the original YOLO dataset defined in ``ORIGINAL_IMAGES`` and
-# ``ORIGINAL_LABELS``. We copy every image and its corresponding label file to
-# the merged dataset. This provides a base on which active learning updates are
-# layered.
+# To avoid retraining on the same original dataset repeatedly, only copy
+# original images that haven't been merged yet. This preserves the base dataset
+# while allowing incremental active learning updates.
 image_files = list(ORIGINAL_IMAGES.glob("*"))
+original_copied = 0
 for img_file in image_files:
-    shutil.copy(img_file, merged_images / img_file.name)
-    label_file = ORIGINAL_LABELS / f"{img_file.stem}.txt"
-    if label_file.exists():
-        shutil.copy(label_file, merged_labels / label_file.name)
+    dest_image = merged_images / img_file.name
+    # Only copy if not already in merged dataset
+    if not dest_image.exists():
+        shutil.copy(img_file, dest_image)
+        label_file = ORIGINAL_LABELS / f"{img_file.stem}.txt"
+        if label_file.exists():
+            shutil.copy(label_file, merged_labels / label_file.name)
+        original_copied += 1
+    else:
+        # Image already exists in merged - just ensure its label is there
+        label_file = ORIGINAL_LABELS / f"{img_file.stem}.txt"
+        dest_label = merged_labels / f"{img_file.stem}.txt"
+        if label_file.exists() and not dest_label.exists():
+            shutil.copy(label_file, dest_label)
 
 # === COPY ACTIVE LABELS AND MATCHED IMAGES ===
 #
@@ -116,12 +127,13 @@ for wrong_path in wrong_files:
 
 # === DATASET MERGE SUMMARY ===
 print(
-    f"Copied {len(image_files)} original images and {len(active_files)} active labels"
+    f"Copied {original_copied} NEW original images (out of {len(image_files)} total) and {len(active_files)} active labels"
 )
 print(
     f"Copied {copied_images} new images from the test folder and removed them afterward"
 )
 print(f"Copied {negative_copied} negative images from wrong labels")
+print(f"Total dataset size: {len(list(merged_images.glob('*')))} images, {len(list(merged_labels.glob('*.txt')))} labels")
 print("Cleaned up used active and wrong labels as well as test images")
 
 # === GENERATE YOLO DATASET YAML ===

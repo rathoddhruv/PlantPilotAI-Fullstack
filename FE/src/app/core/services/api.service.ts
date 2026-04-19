@@ -1,5 +1,5 @@
-import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
 // Environment variable or hardcoded for dev
@@ -113,5 +113,29 @@ export class ApiService {
 
     flushStaged(): Observable<any> {
         return this.http.post(`${API_URL}/project/flush-staged`, {});
+    }
+
+    // ========== BATCH PROCESSING API ==========
+
+    queueAnnotation(filename: string, detections: any[], width: number, height: number, labelType: string = 'correct'): Observable<any> {
+        return this.http.post(`${API_URL}/project/batch/queue`, {
+            filename,
+            detections,
+            width,
+            height,
+            label_type: labelType
+        });
+    }
+
+    rejectBatchAnnotation(filename: string): Observable<any> {
+        return this.http.post(`${API_URL}/project/batch/reject`, { filename });
+    }
+
+    getBatchStatus(): Observable<any> {
+        return this.http.get(`${API_URL}/project/batch/status`);
+    }
+
+    acceptBatch(epochs: number = 40, imgsz: number = 960, model: string = 'yolov8n.pt'): Observable<any> {
+        return this.http.post(`${API_URL}/project/batch/accept-all?epochs=${epochs}&imgsz=${imgsz}&model=${model}`, {});
     }
 }

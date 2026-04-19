@@ -1,10 +1,12 @@
-from fastapi import APIRouter, UploadFile, File, BackgroundTasks, HTTPException
-from pathlib import Path
-import shutil
 import os
+import shutil
+from pathlib import Path
+from typing import List
+
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+
 from BE.services.ml_service import ml_service
 from BE.settings import ML_DIR
-from typing import List
 
 router = APIRouter()
 
@@ -111,3 +113,77 @@ def flush_staged():
     """Wipes the currently staged images and labels."""
     ml_service.flush_staged()
     return {"status": "success", "message": "Staged data cleared."}
+
+# ========== BATCH PROCESSING ENDPOINTS ==========
+
+
+@router.post("/batch/queue")
+async def queue_annotation(data: dict):
+    """
+    Queue an annotation for batch processing instead of training immediately.
+
+    Request body:
+    {
+        "filename": "image.jpg",
+        "detections": [...],
+        "width": 960,
+        "height": 960,
+        "label_type": "correct" | "false_positive" | "false_negative" | "low_confidence"
+    }
+    """
+    try:
+        result = ml_service.queue_annotation(
+            filename=data["filename"],
+            detections=data["detections"],
+            width=data["width"],
+            height=data["height"],
+            label_type=data.get("label_type", "correct"),
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/batch/reject")
+async def reject_annotation(data: dict):
+    """
+    Reject an annotation and remove it from the batch queue.
+    The image file will also be deleted.
+    """
+    try:
+        result = ml_service.reject_annotation(data["filename"])
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/batch/status")
+def get_batch_status():
+    """Get current batch queue status and contents."""
+    return ml_service.get_batch_status()
+
+
+@router.post("/batch/accept-all")
+async def accept_batch(
+    background_tasks: BackgroundTasks,
+    epochs: int = 40,
+    imgsz: int = 960,
+    model: str = "yolov8n.pt",
+):
+    """
+    Accept all queued annotations, save them to training dataset,
+    and trigger training automatically.
+    """
+    try:
+        result = ml_service.accept_batch()
+
+        if result["status"] == "success":
+            # Trigger training in background
+            background_tasks.add_task(
+                ml_service.run_training, epochs=epochs, imgsz=imgsz, model=model
+            )
+            result["training"] = "queued_in_background"
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
