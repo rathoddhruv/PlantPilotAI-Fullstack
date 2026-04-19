@@ -1,0 +1,8 @@
+﻿=== STARTING ACTIVE LEARNING PIPELINE ===
+Updated C:\Data\Projects\PlantPilotAI-Fullstack\ML\yolo_dataset.yaml with absolute path: C:\Data\Projects\PlantPilotAI-Fullstack\ML\data\yolo_dataset
+Updated C:\Data\Projects\PlantPilotAI-Fullstack\ML\yolo_merged.yaml with absolute path: C:\Data\Projects\PlantPilotAI-Fullstack\ML\data\yolo_merged
+No initial dataset found. Proceeding with active learning flow...
+Skipping dataset cleanup (default behavior, no --clean flag)
+MODEL USED: runs\detect\archive\train_20260417_213912\weights\best.pt
+Launching manual_review.py...
+manual_review.py failed: Command '['C:\\Program Files\\Python311\\python.exe', 'manual_review.py']' returned non-zero exit status 1.

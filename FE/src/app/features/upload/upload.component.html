@@ -174,21 +174,37 @@
                         </button>
                     </div>
 
-                    <!-- Manual Refinement Trigger -->
-                    <div *ngIf="stagedImages > 0 && status === 'idle'" 
-                         class="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-between animate-fade-in group hover:bg-emerald-500/20 transition-all">
-                         <div class="flex items-center gap-3 text-left">
-                            <span class="text-xl">🛠️</span>
-                            <div>
-                               <span class="text-[10px] font-black text-emerald-400 uppercase tracking-widest block leading-none mb-1">Staged Batch</span>
-                               <p class="text-[9px] text-emerald-500/70 font-bold uppercase tracking-tighter">Ready for Neural Fusion</p>
-                            </div>
-                         </div>
-                         <button (click)="triggerManualRefinement()" 
-                                 class="px-4 py-2 bg-emerald-500 rounded-xl text-[9px] font-black text-white uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20">
-                             RECODE 🚀
-                         </button>
-                    </div>
+                     <!-- Manual Review Re-ignition -->
+                     <div *ngIf="stagedImages > 0 && status === 'idle' && reviewQueue.getStats().total === 0" 
+                          class="p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl flex items-center justify-between animate-fade-in group hover:bg-indigo-500/20 transition-all">
+                          <div class="flex items-center gap-3 text-left">
+                             <span class="text-xl">📥</span>
+                             <div>
+                                <span class="text-[10px] font-black text-indigo-400 uppercase tracking-widest block leading-none mb-1">Staging Area</span>
+                                <p class="text-[9px] text-indigo-500/70 font-bold uppercase tracking-tighter">{{ stagedImages }} IMAGES AWAITING REVIEW</p>
+                             </div>
+                          </div>
+                          <button (click)="reviveReview()" 
+                                  class="px-4 py-2 bg-indigo-500 rounded-xl text-[9px] font-black text-white uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20">
+                              REVIVE 👁️
+                          </button>
+                     </div>
+
+                     <!-- Manual Refinement Trigger -->
+                     <div *ngIf="stagedImages > 0 && status === 'idle'" 
+                          class="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-between animate-fade-in group hover:bg-emerald-500/20 transition-all">
+                          <div class="flex items-center gap-3 text-left">
+                             <span class="text-xl">🛠️</span>
+                             <div>
+                                <span class="text-[10px] font-black text-emerald-400 uppercase tracking-widest block leading-none mb-1">Staged Batch</span>
+                                <p class="text-[9px] text-emerald-500/70 font-bold uppercase tracking-tighter">Ready for Neural Fusion</p>
+                             </div>
+                          </div>
+                          <button (click)="triggerManualRefinement()" 
+                                  class="px-4 py-2 bg-emerald-500 rounded-xl text-[9px] font-black text-white uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20">
+                              RECODE 🚀
+                          </button>
+                     </div>
                 </div>
             </div>
         </div>

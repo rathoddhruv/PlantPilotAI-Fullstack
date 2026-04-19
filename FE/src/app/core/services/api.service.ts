@@ -103,6 +103,14 @@ export class ApiService {
         return this.http.get<{ images: number, classes: number }>(`${API_URL}/project/staged-stats`);
     }
 
+    getPendingImages(): Observable<{ files: string[] }> {
+        return this.http.get<{ files: string[] }>(`${API_URL}/project/pending-images`);
+    }
+
+    getClasses(): Observable<{ classes: string[] }> {
+        return this.http.get<{ classes: string[] }>(`${API_URL}/project/classes`);
+    }
+
     flushStaged(): Observable<any> {
         return this.http.post(`${API_URL}/project/flush-staged`, {});
     }

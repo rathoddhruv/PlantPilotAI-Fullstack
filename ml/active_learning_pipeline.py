@@ -10,13 +10,15 @@ from config_loader import (
     MODEL_PATH as CONFIG_MODEL_PATH,
 )
 import torch
+from ultralytics import YOLO
 # Disable emojis for Windows terminal compatibility
 USE_EMOJI = False
 from multiprocessing import freeze_support
 
 # Constants for absolute pathing
 ML_DIR = Path(__file__).resolve().parent
-RUNS_DETECT = ML_DIR / "runs" / "detect"
+ROOT_DIR = ML_DIR.parent
+RUNS_DETECT = ROOT_DIR / "runs" / "detect"
 TRAIN_STABLE = RUNS_DETECT / "train"
 
 def get_device():

@@ -143,7 +143,33 @@ export class UploadComponent implements OnInit, OnDestroy {
         this.api.getRuns().subscribe(res => this.syncRunsData(res));
         this.api.getStagedStats().subscribe(res => {
             this.stagedImages = res.images;
-            this.stagedClasses = res.classes;
+        });
+        
+        // Fetch actual neural classes from the model
+        this.api.getClasses().subscribe({
+            next: (res) => {
+                this.datasetClasses = res.classes.length.toString();
+                this.stagedClasses = res.classes.length; // Assume same taxonomy for now
+            },
+            error: () => console.warn("Failed to fetch model classes.")
+        });
+    }
+
+    reviveReview() {
+        this.addLog("📥 Reviving pending review session...");
+        this.api.getPendingImages().subscribe({
+            next: (res) => {
+                if (res.files && res.files.length > 0) {
+                    this.addLog(`Loaded ${res.files.length} images from server queue.`);
+                    this.reviewQueue.setRemoteFiles(res.files);
+                    this.router.navigate(['/review'], { state: { testMode: false } });
+                } else {
+                    this.addLog("⚠️ No pending images found on server.");
+                }
+            },
+            error: (err) => {
+                this.error = "Revive failed: " + (err.error?.detail || err.message);
+            }
         });
     }
 

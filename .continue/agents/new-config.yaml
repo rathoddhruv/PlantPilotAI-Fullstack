@@ -11,7 +11,7 @@ models:
   - name: my gpt-5
     provider: openai
     model: gpt-5
-    apiKey: YOUR_OPENAI_API_KEY_HERE
+    apiKey: 7c1a0133be31264e319fa0a04151dea4
   - uses: ollama/qwen2.5-coder-7b
   - uses: anthropic/claude-4-sonnet
     with:
