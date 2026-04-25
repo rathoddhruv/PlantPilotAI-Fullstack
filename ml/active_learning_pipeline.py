@@ -18,7 +18,7 @@ from multiprocessing import freeze_support
 # Constants for absolute pathing
 ML_DIR = Path(__file__).resolve().parent
 ROOT_DIR = ML_DIR.parent
-RUNS_DETECT = ROOT_DIR / "runs" / "detect"
+RUNS_DETECT = ML_DIR / "runs" / "detect"
 TRAIN_STABLE = RUNS_DETECT / "train"
 
 def get_device():
@@ -381,11 +381,11 @@ if __name__ == '__main__':
         dataset_yaml = YOLO_MERGED_YAML_ABS
 
         print(f"Found {len(train_images)} images and {len(train_labels)} labels.")
-        # force stable save path under ml/runs/detect/train
         TRAIN_STABLE = Path("runs") / "detect" / "train"
         if TRAIN_STABLE.exists():
             shutil.rmtree(TRAIN_STABLE, ignore_errors=True)
 
+        MODEL_PATH = get_latest_model_path()
         print(f"Running YOLO training (Fine-tuning from {MODEL_PATH})...")
         model = YOLO(str(MODEL_PATH))
         device = get_device()
@@ -425,6 +425,7 @@ if __name__ == '__main__':
                 shutil.copy2(target_model, backup_model)
                 print(f"Backed up old model to: {backup_model}")
             if final_best.resolve() != target_model.resolve():
+                target_model.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(final_best, target_model)
                 print(f"Updated MODEL_PATH with new best.pt: {target_model}")
             else:
@@ -440,6 +441,7 @@ if __name__ == '__main__':
                 print(f"Found best.pt at: {found_weights[0]}")
                 final_best = found_weights[0]
                 if final_best.resolve() != target_model.resolve():
+                    target_model.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(final_best, target_model)
                     print(f"Updated MODEL_PATH with found best.pt: {target_model}")
             else:
