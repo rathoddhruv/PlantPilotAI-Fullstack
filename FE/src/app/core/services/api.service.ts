@@ -95,6 +95,13 @@ export class ApiService {
     }
 
     /**
+     * Skips the image explicitly by moving it outside of the pipeline without saving natively.
+     */
+    skipImage(filename: string): Observable<any> {
+        return this.http.post(`${API_URL}/project/skip`, { filename });
+    }
+
+    /**
      * Polls the backend for all available active learning and base model runs.
      */
     getRuns(): Observable<RunsResponse> {

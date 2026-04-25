@@ -52,7 +52,7 @@
                 <div class="flex gap-2">
                     <button (click)="runPrediction(current!)"
                         class="px-5 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition-all shadow-lg">RETRY</button>
-                    <button (click)="reject()"
+                    <button (click)="skip()"
                         class="px-5 py-2 bg-slate-700 text-white rounded-lg text-xs font-bold hover:bg-slate-600 transition-all">SKIP</button>
                 </div>
             </div>
@@ -72,7 +72,7 @@
                     <div class="flex items-center gap-2">
                         <kbd
                             class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[9px] border border-slate-600">A</kbd>
-                        <span class="text-[9px] text-slate-400 uppercase font-bold">Reject</span>
+                        <span class="text-[9px] text-slate-400 uppercase font-bold">Skip</span>
                     </div>
                     <div class="flex items-center gap-2">
                         <kbd
@@ -172,10 +172,10 @@
             <!-- Bottom Command Center (New Position) -->
             <div class="p-3 border-t border-slate-700 bg-slate-800/50 space-y-2">
                 <div class="grid grid-cols-2 gap-2">
-                    <button (click)="reject()"
-                        class="flex flex-col items-center justify-center py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-all group"
-                        title="Reject (Esc)">
-                        <span class="text-[10px] font-black tracking-widest uppercase">Reject</span>
+                    <button (click)="skip()" [disabled]="isLoading"
+                        class="flex flex-col items-center justify-center py-2 bg-slate-700/30 hover:bg-slate-600 text-slate-300 border border-slate-600/50 rounded-lg transition-all disabled:opacity-50 group"
+                        title="Skip Image (A/Backspace)">
+                        <span class="text-[10px] font-black tracking-widest uppercase">Skip Image</span>
                         <span class="text-[8px] opacity-50 font-mono">BACKSPACE</span>
                     </button>
                     <button (click)="accept()" [disabled]="isLoading"

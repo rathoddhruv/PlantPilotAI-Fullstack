@@ -70,6 +70,8 @@ export class UploadComponent implements OnInit, OnDestroy {
 
     // Hardware State
     public cudaAvailable = true; 
+    public gpuName: string | null = null;
+    public gpuWarning: string | null = null;
 
     constructor(
         private api: ApiService,
@@ -118,9 +120,14 @@ export class UploadComponent implements OnInit, OnDestroy {
 
         // 2. Hardware Status Check
         this.api.getSystemInfo().subscribe({
-            next: (res: any) => this.cudaAvailable = res.cuda_available,
+            next: (res: any) => {
+                this.cudaAvailable = res.cudaAvailable;
+                this.gpuName = res.gpuName;
+                this.gpuWarning = res.warning;
+            },
             error: () => {
                 this.cudaAvailable = false;
+                this.gpuWarning = "Hardware status context failed. Assuming CPU.";
                 this.addLog("⚠️ Hardware Status Unknown.");
             }
         });

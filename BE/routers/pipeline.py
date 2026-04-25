@@ -16,15 +16,13 @@ import torch
 
 @router.get("/system/info")
 def get_system_info():
-    """Return system capabilities (CUDA, etc.)"""
-    cuda = torch.cuda.is_available()
-    device_name = torch.cuda.get_device_name(0) if cuda else "CPU"
-    return {
-        "status": "online",
-        "cuda_available": cuda,
-        "device_name": device_name,
-        "torch_version": torch.__version__
-    }
+    """Return system capabilities (CUDA, etc.) natively from the unified checker"""
+    from BE.services.ml_service import ml_service
+    info = ml_service.check_hardware_acceleration(alert_terminal=False)
+    info["status"] = "online"
+    # Attach torch version just in case FE wants it later
+    info["torch_version"] = torch.__version__
+    return info
 
 @router.post("/init")
 def pipeline_init():

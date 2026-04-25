@@ -23,6 +23,7 @@ REVIEWED_DATA_DIR = ML_ROOT / "active_labels"      # Where accepted labels are s
 TRAINING_DATA_DIR = DATA_DIR / "yolo_merged" # Merged dataset for next training 
 TEMP_DIR = DATA_DIR / "temp"
 IMPORT_DATA_DIR = DATA_DIR / "yolo_dataset"
+SKIPPED_DIR = ML_ROOT / "skipped_images"
 
 # Model Directories
 MODELS_DIR = ML_ROOT / "models"
@@ -93,5 +94,5 @@ __all__ = [
     "MODEL_HISTORY_DIR", "BASE_MODEL_DIR", "RUNS_DIR", "TEST_IMAGE_FOLDER",
     "ACTIVE_LABEL_DIR", "WRONG_LABEL_DIR", "MERGED_DATASET_ROOT", "YOLO_DATASET_YAML", "MODEL_PATH",
     "ORIGINAL_IMAGES", "ORIGINAL_LABELS", "UNCERTAIN_THRESHOLD", "IMG_SIZE",
-    "CLASS_FILE", "CLASS_NAMES", "CLASS_MAP", "CLASS_MAP_REVERSE"
+    "CLASS_FILE", "CLASS_NAMES", "CLASS_MAP", "CLASS_MAP_REVERSE", "SKIPPED_DIR"
 ]

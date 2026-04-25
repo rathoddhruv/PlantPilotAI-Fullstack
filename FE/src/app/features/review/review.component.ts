@@ -94,6 +94,9 @@ export class ReviewComponent implements OnInit, OnDestroy {
         if (initial) {
             this.current = initial;
             this.loadPrediction(initial);
+        } else {
+            // Graceful fallback if user explicitly refreshed page natively dropping RAM
+            this.router.navigate(['/upload']);
         }
 
         this.sub = this.reviewQueue.currentItem$.subscribe((item: ReviewItem | null) => {
@@ -383,7 +386,7 @@ export class ReviewComponent implements OnInit, OnDestroy {
 
         // Navigation & Batch
         if (key === 'arrowleft' || key === 'a' || key === 'backspace') {
-            this.reject();
+            this.skip();
         } else if (key === 'arrowright' || key === 'd' || key === 'enter') {
             this.accept();
         } else if (key === 'c' || key === 'y') {
@@ -463,33 +466,54 @@ export class ReviewComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Rejects the image natively. Flushes the image silently and bypasses
-     * appending any active-label outputs to the staging datasets.
+     * Skips the image explicitly. Prevents any labels from saving and forces
+     * the backend payload into SKIPPED_DIR without triggering iteration models natively.
      */
-    reject() {
+    skip() {
         if (!this.current || this.isLoading) return;
+        this.isLoading = true;
+        this.showToast('Skipping Image...');
+
+        const filename = (this.prediction as any)?.filename || this.current.filename || 'unknown.jpg';
+        
+        // Predictively flag UI component to advance immediately.
         this.reviewQueue.updateCurrentItem({ status: 'rejected' });
         const stats = this.queueStats;
-        if (stats.current >= stats.total) {
-            this.router.navigate(['/upload']);
-        } else {
-            this.reviewQueue.next();
-        }
+        const isLast = stats.current >= stats.total;
+
+        this.api.skipImage(filename).subscribe({
+            next: () => {
+                if (isLast) {
+                    this.reviewQueue.clear();
+                    this.router.navigate(['/upload']);
+                } else {
+                    this.isLoading = false;
+                    this.reviewQueue.next();
+                }
+            },
+            error: (e) => {
+                console.error("[Review] Gracefully skipping failed:", e);
+                this.isLoading = false;
+                if (isLast) {
+                    this.router.navigate(['/upload']);
+                } else {
+                    this.reviewQueue.next();
+                }
+            }
+        });
     }
 
     /**
      * Broadly toggles the ignore status safely across the active annotations array.
-     * Extremely useful when an image is completely perfect, or violently flawed.
+     * Triggers accepted pipeline automatically, sending an empty list if ALL are false.
      */
     markAll(correct: boolean) {
         if (this.prediction && !this.isLoading) {
             this.prediction.detections.forEach((d: any) => d.ignore = !correct);
             this.redraw();
-            if (correct) {
-                this.accept();
-            } else {
-                this.showToast("All items ignored.");
-            }
+            // Both "Accept All" and "Reject All" natively trigger training propagation.
+            // If ALL are ignored, payload is [], creating a negative explicit sample.
+            this.accept();
         }
     }
 

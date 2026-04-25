@@ -10,7 +10,7 @@ from ultralytics import YOLO
 from BE.settings import IMPORT_ZIP_SCRIPT, ML_PIPELINE
 from ML.config_loader import (
     RUNS_DIR, IMPORT_DATA_DIR, TRAINING_DATA_DIR, REVIEW_QUEUE_DIR,
-    REVIEWED_DATA_DIR, TEMP_DIR, ML_ROOT, MODEL_HISTORY_DIR
+    REVIEWED_DATA_DIR, TEMP_DIR, ML_ROOT, MODEL_HISTORY_DIR, SKIPPED_DIR
 )
 
 logger = logging.getLogger("plantpilot")
@@ -28,7 +28,31 @@ class MLService:
         self.batch_queue = (
             {}
         )  # {filename: {detections, width, height, label_type, timestamp}}
+        self.check_hardware_acceleration()
         self.load_model()
+
+    def check_hardware_acceleration(self, alert_terminal=True):
+        """Helper to verify actual PyTorch CUDA availability and output colors to terminal."""
+        import torch
+        cuda_ok = torch.cuda.is_available()
+        gpu_name = torch.cuda.get_device_name(0) if cuda_ok else None
+        
+        info = {
+            "device": "cuda" if cuda_ok else "cpu",
+            "cudaAvailable": cuda_ok,
+            "gpuName": gpu_name,
+            "warning": None if cuda_ok else "CUDA is not active. Running on CPU. Training and prediction will be slow."
+        }
+        
+        if alert_terminal:
+            if cuda_ok:
+                print(f"\033[92m[ACCELERATION OK] CUDA is active. Using GPU: {gpu_name}\033[0m")
+                self.log_message(f"⚡ [ACCELERATION OK] CUDA is active. Using GPU: {gpu_name}")
+            else:
+                print(f"\033[91m[ACCELERATION WARNING] CUDA is not active. Running on CPU. Training will be slow.\033[0m")
+                self.log_message("⚠️ [ACCELERATION WARNING] CUDA is not active. Running on CPU. Training will be slow.")
+                
+        return info
 
     def log_message(self, msg: str):
         logger.info(msg)
@@ -49,7 +73,7 @@ class MLService:
 
         if archive:
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            archive_root = ML_DIR / "archive" / f"project_{ts}"
+            archive_root = ML_ROOT / "archive" / f"project_{ts}"
             archive_root.mkdir(parents=True, exist_ok=True)
             self.log_message(f"Archiving project to {archive_root.name}...")
 
@@ -144,6 +168,7 @@ class MLService:
 
     def run_training(self, epochs=100, imgsz=960, model="yolov8n.pt"):
         """Run the active learning pipeline with streaming output."""
+        self.check_hardware_acceleration()
         self.logs.clear()
         self.log_message("🚀 NEURAL ENGINE IGNITION: Preparing refinement pipeline...")
         cmd = [
@@ -182,6 +207,7 @@ class MLService:
 
     def predict(self, image_path: Path, conf=0.25):
         """Run inference on a single image with fusing error protection."""
+        self.check_hardware_acceleration()
         if not self.model: self.load_model()
         if not self.model: raise RuntimeError("No model loaded")
 
@@ -359,28 +385,23 @@ class MLService:
             "classes": len(classes)
         }
 
-    def get_staged_stats(self):
-        """Count images and classes currently in yolo_merged (staged for next train)."""
-        merged_images = ML_DIR / "data" / "yolo_merged" / "images" / "train"
-        merged_labels = ML_DIR / "data" / "yolo_merged" / "labels" / "train"
 
-        images = list(merged_images.glob("*")) if merged_images.exists() else []
-        labels = list(merged_labels.glob("*.txt")) if merged_labels.exists() else []
 
-        classes = set()
-        for lab in labels:
-            if lab.stat().st_size > 0:
-                try:
-                    for line in lab.read_text().splitlines():
-                        if line.strip():
-                            classes.add(line.split()[0])
-                except:
-                    pass
-
-        return {
-            "images": len(images),
-            "classes": len(classes)
-        }
+    def skip_annotation(self, filename: str):
+        """
+        Moves the source file out of the review queue into a skipped directory.
+        Prevents training ingestion while allowing future reassessment safely.
+        """
+        source_file = REVIEW_QUEUE_DIR / filename
+        SKIPPED_DIR.mkdir(parents=True, exist_ok=True)
+        
+        if source_file.exists():
+            target_file = SKIPPED_DIR / filename
+            shutil.move(str(source_file), str(target_file))
+            self.log_message(f"Moved {filename} to skipped directory.")
+            return True
+        self.log_message(f"Could not skip {filename}: File not found in queue.")
+        return False
 
     def flush_staged(self):
         """Wipe the staged images and labels in yolo_merged."""

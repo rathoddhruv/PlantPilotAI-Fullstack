@@ -103,6 +103,18 @@ async def save_annotation(data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/skip")
+def skip_image(data: dict):
+    """
+    Skip an image during review.
+    Moves the file smoothly out of the sequence into SKIPPED_DIR preserving it for later.
+    """
+    try:
+        success = ml_service.skip_annotation(data.get("filename"))
+        return {"status": "success", "skipped": success}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/reset")
 def reset_project(archive: bool = False):
     """Reset all project data (datasets, runs), optionally archiving."""

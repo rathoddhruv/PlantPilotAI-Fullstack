@@ -27,12 +27,12 @@ import { interval, Subscription, startWith, switchMap } from 'rxjs';
           <div class="bg-slate-900/40 rounded-2xl p-4 border border-slate-700/30 space-y-3">
             <div class="flex justify-between items-center">
               <span class="text-slate-500 font-bold uppercase text-[9px]">Acceleration</span>
-              <span [class.text-indigo-400]="sysInfo?.cuda_available" 
-                    [class.text-orange-500]="!sysInfo?.cuda_available"
-                    class="font-mono font-black text-[10px]">{{ sysInfo?.cuda_available ? 'CUDA ⚡' : 'CPU 🐢' }}</span>
+              <span [class.text-indigo-400]="sysInfo?.cudaAvailable" 
+                    [class.text-orange-500]="!sysInfo?.cudaAvailable"
+                    class="font-mono font-black text-[10px]" [ngClass]="sysInfo?.cudaAvailable ? 'text-emerald-400' : 'text-red-400'">{{ sysInfo?.cudaAvailable ? 'CUDA ⚡' : 'CPU 🐢' }}</span>
             </div>
-            <div *ngIf="sysInfo && !sysInfo.cuda_available" class="p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
-               <p class="text-[8px] text-red-400 font-black uppercase tracking-widest text-center leading-none">⚠️ GPU FALLBACK ACTIVE</p>
+            <div *ngIf="sysInfo && !sysInfo.cudaAvailable" class="p-2 bg-red-500/10 border border-red-500/20 rounded-lg animate-pulse">
+               <p class="text-[8px] text-red-400 font-black uppercase tracking-widest text-center leading-none">⚠️ CUDA is not active. Running on CPU. Training will be slow.</p>
             </div>
             <div class="flex justify-between items-center gap-2">
               <span class="text-slate-500 font-bold uppercase text-[9px]">Compute</span>

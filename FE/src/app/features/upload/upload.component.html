@@ -15,11 +15,26 @@
                 <span class="text-2xl">🐢</span>
                 <div>
                    <h3 class="text-xs font-black text-red-400 uppercase tracking-widest leading-none mb-1">Acceleration Alert: Legacy Mode</h3>
-                   <p class="text-[10px] text-red-500/70 font-bold uppercase tracking-tighter">GPU Not Detected. Training performance will be significantly reduced.</p>
+                   <p class="text-[10px] text-red-500/70 font-bold tracking-tighter">{{ gpuWarning || 'CUDA is not active. Running on CPU. Training and prediction will be slow.' }}</p>
                 </div>
              </div>
              <div class="px-3 py-1 bg-red-500/20 rounded-full border border-red-500/40 text-[9px] font-black text-red-400 uppercase tracking-widest">
                 CPU ACTIVE
+             </div>
+        </div>
+
+        <!-- GPU Success Banner -->
+        <div *ngIf="cudaAvailable" 
+             class="w-full max-w-4xl mb-6 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 flex items-center justify-between">
+             <div class="flex items-center gap-4">
+                <span class="text-2xl">⚡</span>
+                <div>
+                   <h3 class="text-xs font-black text-emerald-400 uppercase tracking-widest leading-none mb-1">Acceleration Active</h3>
+                   <p class="text-[10px] text-emerald-500/70 font-bold tracking-tighter">CUDA initialized. Using GPU: {{ gpuName || 'NVIDIA GPU' }}</p>
+                </div>
+             </div>
+             <div class="px-3 py-1 bg-emerald-500/20 rounded-full border border-emerald-500/40 text-[9px] font-black text-emerald-400 uppercase tracking-widest">
+                CUDA ACTIVE
              </div>
         </div>
 

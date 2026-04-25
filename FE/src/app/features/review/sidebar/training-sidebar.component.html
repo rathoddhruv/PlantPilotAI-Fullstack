@@ -25,9 +25,9 @@
         </div>
         <div class="flex items-center justify-between mt-1">
             <span class="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">CUDA</span>
-            <span [class.text-emerald-500]="sysInfo.cuda_available" [class.text-slate-600]="!sysInfo.cuda_available"
-                class="text-[9px] font-bold uppercase">
-                {{ sysInfo.cuda_available ? 'READY' : 'OFF' }}
+            <span [class.text-emerald-500]="sysInfo.cudaAvailable" [class.text-slate-600]="!sysInfo.cudaAvailable"
+                class="font-black text-[9px] uppercase tracking-widest bg-slate-900/50 px-2 py-0.5 rounded border border-slate-700">
+                {{ sysInfo.cudaAvailable ? 'READY' : 'OFF' }}
             </span>
         </div>
     </div>
