@@ -12,6 +12,7 @@ export interface Detection {
     confidence: number;
     box: [number, number, number, number]; // x1, y1, x2, y2
     ignore?: boolean;
+    isManual?: boolean;
 }
 
 export interface PredictionResult {

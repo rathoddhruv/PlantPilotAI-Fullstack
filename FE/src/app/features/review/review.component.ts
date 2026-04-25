@@ -40,7 +40,41 @@ export class ReviewComponent implements OnInit, OnDestroy {
         private router: Router
     ) { }
 
+    isDrawing = false;
+    isCtrlPressed = false;
+    drawStartX = 0;
+    drawStartY = 0;
+    currentDrawX = 0;
+    currentDrawY = 0;
+
+    classColors = [
+        '#f59e0b', // amber-500
+        '#3b82f6', // blue-500
+        '#10b981', // emerald-500
+        '#ef4444', // red-500
+        '#8b5cf6', // violet-500
+        '#ec4899', // pink-500
+        '#14b8a6', // teal-500
+        '#f97316', // orange-500
+    ];
+
+    getClassColor(className: string): string {
+        const index = this.classNames.findIndex(c => c.toLowerCase() === className.toLowerCase());
+        if (index === -1) return '#94a3b8'; // fallback slate-400
+        return this.classColors[index % this.classColors.length];
+    }
+
     ngOnInit() {
+        this.api.getClasses().subscribe({
+            next: (res) => {
+                if (res.classes && res.classes.length > 0) {
+                    this.classNames = res.classes;
+                    this.classOptions = res.classes;
+                }
+            },
+            error: (err) => console.warn('Could not fetch classes:', err)
+        });
+
         const state = window.history.state;
         if (state) {
             this.isTestMode = !!state.testMode;
@@ -133,12 +167,21 @@ export class ReviewComponent implements OnInit, OnDestroy {
                 if (det.ignore) return;
 
                 const [x1, y1, x2, y2] = det.box;
-                const cls = det.class.toLowerCase();
-                const color = cls === 'dandelion' ? '#f59e0b' : '#3b82f6';
+                const cls = det.class;
+                const color = this.getClassColor(cls);
 
                 ctx.strokeStyle = color;
                 ctx.lineWidth = Math.max(4, this.image.width * 0.005);
+                
+                // For manual labels, maybe distinct
+                if (det.isManual) {
+                    ctx.setLineDash([10, 10]);
+                } else {
+                    ctx.setLineDash([]);
+                }
+                
                 ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                ctx.setLineDash([]);
 
                 const fontSize = Math.max(16, this.image.width * 0.02);
                 ctx.font = `bold ${fontSize}px Inter, sans-serif`;
@@ -153,6 +196,17 @@ export class ReviewComponent implements OnInit, OnDestroy {
                 ctx.fillText(text, x1 + pad, y1 - pad * 0.5);
             });
         }
+
+        // Draw the temporary rect if actively drawing
+        if (this.isDrawing) {
+            ctx.strokeStyle = this.classNames.length ? this.getClassColor(this.classNames[0]) : '#10b981';
+            ctx.lineWidth = Math.max(2, this.image.width * 0.003);
+            ctx.setLineDash([10, 10]);
+            const w = this.currentDrawX - this.drawStartX;
+            const h = this.currentDrawY - this.drawStartY;
+            ctx.strokeRect(this.drawStartX, this.drawStartY, w, h);
+            ctx.setLineDash([]);
+        }
     }
 
     toggleIgnore(det: any) {
@@ -160,8 +214,85 @@ export class ReviewComponent implements OnInit, OnDestroy {
         this.redraw();
     }
 
+    deleteDetection(index: number) {
+        if (this.prediction && this.prediction.detections) {
+            this.prediction.detections.splice(index, 1);
+            this.redraw();
+        }
+    }
+
+    getEventCoords(e: MouseEvent) {
+        const canvas = this.canvas.nativeElement;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
+    }
+
+    startDraw(e: MouseEvent) {
+        if (!e.ctrlKey || this.isLoading || this.isTestMode) return;
+        const coords = this.getEventCoords(e);
+        this.isDrawing = true;
+        this.drawStartX = coords.x;
+        this.drawStartY = coords.y;
+        this.currentDrawX = coords.x;
+        this.currentDrawY = coords.y;
+    }
+
+    onDraw(e: MouseEvent) {
+        if (!this.isDrawing) return;
+        const coords = this.getEventCoords(e);
+        this.currentDrawX = coords.x;
+        this.currentDrawY = coords.y;
+        this.redraw();
+    }
+
+    endDraw(e: MouseEvent) {
+        if (!this.isDrawing) return;
+        this.isDrawing = false;
+        const coords = this.getEventCoords(e);
+        
+        const x1 = Math.min(this.drawStartX, coords.x);
+        const y1 = Math.min(this.drawStartY, coords.y);
+        const x2 = Math.max(this.drawStartX, coords.x);
+        const y2 = Math.max(this.drawStartY, coords.y);
+
+        // Filter out accidental clicks
+        if (x2 - x1 > 5 && y2 - y1 > 5) {
+            if (!this.prediction) {
+                // Should exist but just in case
+                return;
+            }
+            
+            this.prediction.detections.push({
+                class: this.classNames[0] || 'Unknown',
+                confidence: 1.0,
+                box: [x1, y1, x2, y2],
+                ignore: false,
+                isManual: true
+            });
+            this.highlightedIndex = this.prediction.detections.length - 1;
+        }
+        
+        this.redraw();
+    }
+
+    cancelDraw() {
+        if (this.isDrawing) {
+            this.isDrawing = false;
+            this.redraw();
+        }
+    }
+
     @HostListener('window:keydown', ['$event'])
     handleKeyboardEvent(event: KeyboardEvent) {
+        if (event.key === 'Control') {
+            this.isCtrlPressed = true;
+        }
+
         if (this.isLoading) return;
 
         const key = event.key.toLowerCase();
@@ -195,6 +326,13 @@ export class ReviewComponent implements OnInit, OnDestroy {
             this.markAll(false);
         } else if (key === 'm' || key === 'escape') {
             this.goBack();
+        }
+    }
+
+    @HostListener('window:keyup', ['$event'])
+    handleKeyUp(event: KeyboardEvent) {
+        if (event.key === 'Control') {
+            this.isCtrlPressed = false;
         }
     }
 
