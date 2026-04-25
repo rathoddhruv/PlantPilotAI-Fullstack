@@ -14,6 +14,11 @@ export interface LogEntry {
     type: 'info' | 'error' | 'success' | 'warn';
 }
 
+/**
+ * Main dashboard component acting as the entrance to the PlantPilotAI application.
+ * Manages dataset initialization, ZIP uploads, single/batch inference queues,
+ * and background neural training status polling.
+ */
 @Component({
     selector: 'app-upload',
     standalone: true,
@@ -262,6 +267,10 @@ export class UploadComponent implements OnInit, OnDestroy {
         }
     }
 
+    /**
+     * Initializes a fresh PlantPilotAI project from an uploaded Label Studio zip.
+     * Triggers the backend extraction and subsequent native YOLO base training loop.
+     */
     startZipFlow(file: File) {
         this.status = 'initializing';
         this.statusTitle = 'Initializing Project';
@@ -283,6 +292,11 @@ export class UploadComponent implements OnInit, OnDestroy {
         });
     }
 
+    /**
+     * Actively polls the backend for active pipeline terminal logs.
+     * Uses regex mapping to predict the current pipeline process dynamically
+     * showing visual feedback mapped strictly from YOLO subprocess output.
+     */
     startLogPolling() {
         this.stopLogPolling();
         this.logSub = interval(1000).pipe(

@@ -7,6 +7,11 @@ import { switchMap, Subscription } from 'rxjs';
 import { ToastService } from '../../core/services/toast.service';
 import { Router } from '@angular/router';
 
+/**
+ * ReviewComponent handles the active learning human-in-the-loop workflow.
+ * Renders model inferences on a canvas, allows users to accept/reject items,
+ * and supports manual annotation for missed bounding boxes.
+ */
 @Component({
     selector: 'app-review',
     standalone: true,
@@ -147,6 +152,10 @@ export class ReviewComponent implements OnInit, OnDestroy {
         if (this.image.complete && this.image.width > 0) this.redraw();
     }
 
+    /**
+     * Redraws the primary active canvas utilizing HTML5 `getContext('2d')`.
+     * Forces boxes to conform visually to their internally dynamic class mappings.
+     */
     redraw() {
         if (!this.canvas || !this.image.width) return;
         const ctx = this.canvas.nativeElement.getContext('2d');
@@ -221,6 +230,11 @@ export class ReviewComponent implements OnInit, OnDestroy {
         }
     }
 
+    /**
+     * Converts the box drawn on the scaled UI image back to the original image size.
+     * YOLO training needs coordinates based on the real image dimensions, not the
+     * displayed browser size.
+     */
     getEventCoords(e: MouseEvent) {
         const canvas = this.canvas.nativeElement;
         const rect = canvas.getBoundingClientRect();
@@ -232,6 +246,10 @@ export class ReviewComponent implements OnInit, OnDestroy {
         };
     }
 
+    /**
+     * Engages the visual manual annotation crosshair bounding drawing.
+     * Listens explicitly to Ctrl+Click to prevent accidental drags on the viewport.
+     */
     startDraw(e: MouseEvent) {
         if (!e.ctrlKey || this.isLoading || this.isTestMode) return;
         const coords = this.getEventCoords(e);
@@ -242,6 +260,10 @@ export class ReviewComponent implements OnInit, OnDestroy {
         this.currentDrawY = coords.y;
     }
 
+    /**
+     * Refreshes the canvas context live while dragging to render visually
+     * the dashed rectangle of the currently dragged manual annotation.
+     */
     onDraw(e: MouseEvent) {
         if (!this.isDrawing) return;
         const coords = this.getEventCoords(e);
@@ -250,6 +272,11 @@ export class ReviewComponent implements OnInit, OnDestroy {
         this.redraw();
     }
 
+    /**
+     * Finalizes the bounding coordinates, strips out accidental tiny clicks,
+     * and maps exactly into an internal `.detections` formatted object identically
+     * to how native YOLO bounding structures are defined.
+     */
     endDraw(e: MouseEvent) {
         if (!this.isDrawing) return;
         this.isDrawing = false;
@@ -336,6 +363,11 @@ export class ReviewComponent implements OnInit, OnDestroy {
         }
     }
 
+    /**
+     * Accepts and submits all non-ignored detections directly to the backend
+     * staging queues to be natively formatted and merged into the training sequence.
+     * Safely rolls the active queue forward automatically on completion!
+     */
     accept() {
         if (this.isLoading) return;
         
@@ -391,6 +423,10 @@ export class ReviewComponent implements OnInit, OnDestroy {
         }
     }
 
+    /**
+     * Rejects the image natively. Flushes the image silently and bypasses
+     * appending any active-label outputs to the staging datasets.
+     */
     reject() {
         if (!this.current || this.isLoading) return;
         this.reviewQueue.updateCurrentItem({ status: 'rejected' });
@@ -402,6 +438,10 @@ export class ReviewComponent implements OnInit, OnDestroy {
         }
     }
 
+    /**
+     * Broadly toggles the ignore status safely across the active annotations array.
+     * Extremely useful when an image is completely perfect, or violently flawed.
+     */
     markAll(correct: boolean) {
         if (this.prediction && !this.isLoading) {
             this.prediction.detections.forEach((d: any) => d.ignore = !correct);

@@ -1,3 +1,19 @@
+"""
+File: boost_merge_labels.py
+
+Purpose:
+Takes human-reviewed active learning annotations and merges them
+into the primary training dataset layout before retraining.
+
+Reads from:
+- ML/data/test_images/ (or whatever TEST_IMAGE_FOLDER is configured to)
+- ML/active_labels/
+- ML/wrong_labels/
+
+Writes to:
+- ML/data/yolo_merged/ (the combined ultimate training directory)
+"""
+
 import shutil
 from pathlib import Path
 

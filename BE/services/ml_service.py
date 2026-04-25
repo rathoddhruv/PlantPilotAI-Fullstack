@@ -7,7 +7,11 @@ from pathlib import Path
 
 from ultralytics import YOLO
 
-from BE.settings import IMPORT_ZIP_SCRIPT, ML_DIR, ML_PIPELINE
+from BE.settings import IMPORT_ZIP_SCRIPT, ML_PIPELINE
+from ML.config_loader import (
+    RUNS_DIR, IMPORT_DATA_DIR, TRAINING_DATA_DIR, REVIEW_QUEUE_DIR,
+    REVIEWED_DATA_DIR, TEMP_DIR, ML_ROOT, MODEL_HISTORY_DIR
+)
 
 logger = logging.getLogger("plantpilot")
 
@@ -51,15 +55,15 @@ class MLService:
 
         # 2. Paths to wipe or archive
         targets = [
-            ML_DIR / "datasets",
-            ML_DIR / "runs",
-            ML_DIR / "data" / "yolo_dataset",
-            ML_DIR / "data" / "yolo_dataset_used",
-            ML_DIR / "data" / "yolo_merged",
-            ML_DIR / "data" / "test_images",
-            ML_DIR / "label_studio_exports",
-            ML_DIR / "temp",
-            ML_DIR / "eval_output"
+            ML_ROOT / "datasets",
+            RUNS_DIR,
+            IMPORT_DATA_DIR,
+            ML_ROOT / "data" / "yolo_dataset_used",
+            TRAINING_DATA_DIR,
+            REVIEW_QUEUE_DIR,
+            ML_ROOT / "label_studio_exports",
+            TEMP_DIR,
+            ML_ROOT / "eval_output"
         ]
 
         for p in targets:
@@ -76,10 +80,10 @@ class MLService:
                     self.log_message(f"❌ Error on {p.name}: {e}")
 
         # 3. Re-create structures
-        (ML_DIR / "data" / "test_images").mkdir(parents=True, exist_ok=True)
-        (ML_DIR / "data" / "yolo_dataset").mkdir(parents=True, exist_ok=True)
-        (ML_DIR / "data" / "yolo_merged").mkdir(parents=True, exist_ok=True)
-        (ML_DIR / "datasets").mkdir(exist_ok=True)
+        REVIEW_QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+        IMPORT_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        TRAINING_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        (ML_ROOT / "datasets").mkdir(exist_ok=True)
 
         # 4. Final reload
         self.load_model()
@@ -87,7 +91,7 @@ class MLService:
 
     def load_model(self):
         """Load the newest best.pt or fallback to base model."""
-        runs_dir = ML_DIR / "runs" / "detect"
+        runs_dir = RUNS_DIR / "detect"
 
         # Look for the absolute latest best.pt across ALL subfolders
         all_weights = list(runs_dir.rglob("weights/best.pt")) if runs_dir.exists() else []
@@ -105,7 +109,7 @@ class MLService:
         # Fallback to base models
         base_options = ["yolo11n.pt", "yolov8n.pt", "yolov8s.pt"]
         for opt in base_options:
-            path = ML_DIR / opt
+            path = ML_ROOT / opt
             if path.exists():
                 self.log_message(f"ℹ️ Training not run yet. Using base model: {opt}")
                 self.model = YOLO(str(path))
@@ -128,7 +132,7 @@ class MLService:
             capture_output=True, 
             text=True, 
             encoding="utf-8",
-            cwd=str(ML_DIR)  # CRITICAL: Run from ML directory
+            cwd=str(ML_ROOT)  # CRITICAL: Run from ML directory
         )
 
         if result.returncode != 0:
@@ -240,10 +244,10 @@ class MLService:
         Save a user-verified annotation to the training set.
         Moves image from uploads to dataset and creates .txt label.
         """
-        uploads_file = ML_DIR / "data" / "test_images" / filename
+        uploads_file = REVIEW_QUEUE_DIR / filename
 
         # Target directory for active learning refinement
-        active_labels_dir = ML_DIR / "active_labels"
+        active_labels_dir = REVIEWED_DATA_DIR
         active_labels_dir.mkdir(parents=True, exist_ok=True)
 
         if not uploads_file.exists():
@@ -302,8 +306,8 @@ class MLService:
 
     def get_staged_stats(self):
         """Count images and classes currently in yolo_merged (staged for next train)."""
-        merged_images = ML_DIR / "data" / "yolo_merged" / "images" / "train"
-        merged_labels = ML_DIR / "data" / "yolo_merged" / "labels" / "train"
+        merged_images = TRAINING_DATA_DIR / "images" / "train"
+        merged_labels = TRAINING_DATA_DIR / "labels" / "train"
 
         images = list(merged_images.glob("*")) if merged_images.exists() else []
         labels = list(merged_labels.glob("*.txt")) if merged_labels.exists() else []
@@ -348,8 +352,8 @@ class MLService:
 
     def flush_staged(self):
         """Wipe the staged images and labels in yolo_merged."""
-        merged_images = ML_DIR / "data" / "yolo_merged" / "images" / "train"
-        merged_labels = ML_DIR / "data" / "yolo_merged" / "labels" / "train"
+        merged_images = TRAINING_DATA_DIR / "images" / "train"
+        merged_labels = TRAINING_DATA_DIR / "labels" / "train"
 
         if merged_images.exists():
             shutil.rmtree(merged_images)
@@ -406,7 +410,7 @@ class MLService:
             self.log_message(f"❌ Removed {filename} from batch queue")
 
         # Also remove from test_images if present
-        test_image = ML_DIR / "data" / "test_images" / filename
+        test_image = REVIEW_QUEUE_DIR / filename
         if test_image.exists():
             test_image.unlink()
             self.log_message(f"🗑️ Deleted {filename} from test_images")
@@ -446,13 +450,13 @@ class MLService:
                 # Handle different label types
                 if label_type == "false_positive":
                     # For false positives, save empty label (no objects)
-                    test_image = ML_DIR / "data" / "test_images" / filename
+                    test_image = REVIEW_QUEUE_DIR / filename
                     if test_image.exists():
                         merged_images = (
-                            ML_DIR / "data" / "yolo_merged" / "images" / "train"
+                            TRAINING_DATA_DIR / "images" / "train"
                         )
                         merged_labels = (
-                            ML_DIR / "data" / "yolo_merged" / "labels" / "train"
+                            TRAINING_DATA_DIR / "labels" / "train"
                         )
                         merged_images.mkdir(parents=True, exist_ok=True)
                         merged_labels.mkdir(parents=True, exist_ok=True)

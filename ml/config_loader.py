@@ -1,72 +1,84 @@
+"""
+File: config_loader.py
+
+Purpose:
+Centralized configuration manager for PlantPilotAI ML Pipeline.
+Defines unified directory structures, resolves paths dynamically,
+and loads application settings. Keeps paths strictly structured 
+into models, data, and runs.
+"""
+
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# === HELPERS (must be defined before use) ===
+# === DIRECTORY STRUCTURE ===
 ML_ROOT = Path(__file__).resolve().parent
 
-def get_path(name, fallback):
+# Data Directories
+DATA_DIR = ML_ROOT / "data"
+UPLOADS_DIR = DATA_DIR / "uploads"
+REVIEW_QUEUE_DIR = DATA_DIR / "test_images"  # Historical test_images acts as review_queue
+REVIEWED_DATA_DIR = ML_ROOT / "active_labels"      # Where accepted labels are stored
+TRAINING_DATA_DIR = DATA_DIR / "yolo_merged" # Merged dataset for next training 
+TEMP_DIR = DATA_DIR / "temp"
+IMPORT_DATA_DIR = DATA_DIR / "yolo_dataset"
+
+# Model Directories
+MODELS_DIR = ML_ROOT / "models"
+CURRENT_MODEL_DIR = MODELS_DIR / "current"
+MODEL_HISTORY_DIR = MODELS_DIR / "history"
+BASE_MODEL_DIR = MODELS_DIR / "base"
+RUNS_DIR = ML_ROOT / "runs"
+
+# === HELPER FUNCTIONS ===
+def get_path(name: str, fallback: Path | str) -> Path:
+    """
+    Returns an absolute Path based on an environment variable or fallback.
+    """
     val = os.getenv(name)
     if val:
         return Path(val).resolve()
-    # If using fallback, anchor to ML_ROOT
-    return (ML_ROOT / fallback).resolve()
+    if isinstance(fallback, str):
+        return (ML_ROOT / fallback).resolve()
+    return fallback.resolve()
 
-def get_float(name, fallback):
+def get_float(name: str, fallback: float) -> float:
+    """Gets a float setting from environment variables."""
     return float(os.getenv(name, fallback))
 
-def get_int(name, fallback):
+def get_int(name: str, fallback: int) -> int:
+    """Gets an integer setting from environment variables."""
     return int(os.getenv(name, fallback))
 
-# === LOAD ENV ===
-# try to load .env from ML_ROOT
+# Load .env
 load_dotenv(dotenv_path=ML_ROOT / ".env")
 
-# === ORIGINAL PATHS ===
-ORIGINAL_IMAGES = get_path("ORIGINAL_IMAGES", "data/yolo_dataset/images/train")
-ORIGINAL_LABELS = get_path("ORIGINAL_LABELS", "data/yolo_dataset/labels/train")
-
-# === MODEL PATHS (all same) ===
-DEFAULT_DETECT_MODEL = get_path(
-    "DEFAULT_DETECT_MODEL", "runs/detect/train/weights/best.pt"
-)
-DEFAULT_MODEL = get_path("DEFAULT_MODEL", "runs/detect/train/weights/best.pt")
-MODEL_PATH = get_path("MODEL_PATH", "runs/detect/train/weights/best.pt")  # universal
-
-# === INPUT + REVIEW PATHS ===
-TEST_IMAGE_FOLDER = get_path("TEST_IMAGE_FOLDER", "data/test_images")
-CLASS_FILE = get_path("CLASS_FILE", "class_names.txt")
-ORIGINAL_IMAGES = get_path("ORIGINAL_IMAGES", "data/yolo_dataset/images/train")
-ORIGINAL_LABELS = get_path("ORIGINAL_LABELS", "data/yolo_dataset/labels/train")
-
-# === REVIEW SETTINGS ===
-UNCERTAIN_THRESHOLD = get_float("UNCERTAIN_THRESHOLD", 0.35)
-IMG_SIZE = get_int("IMG_SIZE", 960)
-ACDSEE_PATH = os.getenv(
-    "ACDSEE_PATH", "C:/Program Files/ACD Systems/ACDSee Pro/6.0/ACDSeePro6.exe"
-)
-
-# === OUTPUT PATHS ===
-ACTIVE_LABEL_DIR = get_path("ACTIVE_LABEL_DIR", "active_labels")
-MANUAL_REVIEW_DIR = get_path("MANUAL_REVIEW_DIR", "active_review")
-WRONG_LABEL_DIR = get_path("WRONG_LABEL_DIR", "wrong_labels")
-SAVE_DIR = get_path("SAVE_DIR", "runs/active_review_output")
-MERGED_DATASET_ROOT = get_path("MERGED_DATASET_ROOT", "data/yolo_merged")
+# === ASSIGNED PATHS ===
+TEST_IMAGE_FOLDER = get_path("TEST_IMAGE_FOLDER", REVIEW_QUEUE_DIR)
+ACTIVE_LABEL_DIR = get_path("ACTIVE_LABEL_DIR", REVIEWED_DATA_DIR)
+WRONG_LABEL_DIR = get_path("WRONG_LABEL_DIR", ML_ROOT / "wrong_labels")
+MERGED_DATASET_ROOT = get_path("MERGED_DATASET_ROOT", TRAINING_DATA_DIR)
 YOLO_DATASET_YAML = get_path("YOLO_DATASET_YAML", "yolo_dataset.yaml")
 
-# === DATA SPLIT ===
-SPLIT_RATIO = get_float("SPLIT_RATIO", 0.9)
+# Primary tracking weight across pipeline iterations
+MODEL_PATH = get_path("MODEL_PATH", RUNS_DIR / "detect" / "train" / "weights" / "best.pt")
 
-# === CLASS LABELS (safe fallback) ===
-# ensure we look for class_names.txt relative to this file if not found
-THIS_DIR = Path(__file__).resolve().parent
+# Original fallback dataset imports
+ORIGINAL_IMAGES = IMPORT_DATA_DIR / "images" / "train"
+ORIGINAL_LABELS = IMPORT_DATA_DIR / "labels" / "train"
+
+# Review Settings
+UNCERTAIN_THRESHOLD = get_float("UNCERTAIN_THRESHOLD", 0.35)
+IMG_SIZE = get_int("IMG_SIZE", 960)
+
+# Classes
+CLASS_FILE = get_path("CLASS_FILE", "class_names.txt")
 if not CLASS_FILE.exists():
-    alt_path = THIS_DIR / "class_names.txt"
+    alt_path = ML_ROOT / "class_names.txt"
     if alt_path.exists():
         CLASS_FILE = alt_path
     else:
-        print(f"[WARN] class_names.txt not found at {CLASS_FILE}, using default placeholder.")
-        # create a temporary default file to avoid crash
         CLASS_FILE.write_text("default_class\n", encoding="utf-8")
 
 with CLASS_FILE.open("r", encoding="utf-8") as f:
@@ -75,26 +87,11 @@ with CLASS_FILE.open("r", encoding="utf-8") as f:
 CLASS_MAP = {name: idx for idx, name in enumerate(CLASS_NAMES)}
 CLASS_MAP_REVERSE = {idx: name for name, idx in CLASS_MAP.items()}
 
-# === EXPORT ===
 __all__ = [
-    "DEFAULT_DETECT_MODEL",
-    "DEFAULT_MODEL",
-    "MODEL_PATH",
-    "TEST_IMAGE_FOLDER",
-    "CLASS_FILE",
-    "ORIGINAL_IMAGES",
-    "ORIGINAL_LABELS",
-    "UNCERTAIN_THRESHOLD",
-    "IMG_SIZE",
-    "ACDSEE_PATH",
-    "ACTIVE_LABEL_DIR",
-    "MANUAL_REVIEW_DIR",
-    "WRONG_LABEL_DIR",
-    "SAVE_DIR",
-    "MERGED_DATASET_ROOT",
-    "YOLO_DATASET_YAML",
-    "SPLIT_RATIO",
-    "CLASS_NAMES",
-    "CLASS_MAP",
-    "CLASS_MAP_REVERSE",
+    "ML_ROOT", "DATA_DIR", "UPLOADS_DIR", "REVIEW_QUEUE_DIR", "REVIEWED_DATA_DIR", 
+    "TRAINING_DATA_DIR", "TEMP_DIR", "IMPORT_DATA_DIR", "MODELS_DIR", "CURRENT_MODEL_DIR",
+    "MODEL_HISTORY_DIR", "BASE_MODEL_DIR", "RUNS_DIR", "TEST_IMAGE_FOLDER",
+    "ACTIVE_LABEL_DIR", "WRONG_LABEL_DIR", "MERGED_DATASET_ROOT", "YOLO_DATASET_YAML", "MODEL_PATH",
+    "ORIGINAL_IMAGES", "ORIGINAL_LABELS", "UNCERTAIN_THRESHOLD", "IMG_SIZE",
+    "CLASS_FILE", "CLASS_NAMES", "CLASS_MAP", "CLASS_MAP_REVERSE"
 ]

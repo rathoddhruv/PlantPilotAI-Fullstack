@@ -6,15 +6,23 @@ from typing import List
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 
 from BE.services.ml_service import ml_service
-from BE.settings import ML_DIR
+from ML.config_loader import REVIEW_QUEUE_DIR, TEMP_DIR
 
 router = APIRouter()
 
 @router.post("/upload")
 async def upload_images(files: List[UploadFile] = File(...)):
-    """Upload images for immediate inference/review."""
+    """
+    Upload images for manual review and inference.
+    
+    Accepts raw images from the User Interface, bypasses immediate YOLO parsing
+    to dump securely into the staging directory for the queue system.
+
+    Writes to:
+    - ML/data/test_images/ (Managed by REVIEW_QUEUE_DIR configuration)
+    """
     uploaded_paths = []
-    temp_dir = ML_DIR / "data" / "test_images"
+    temp_dir = REVIEW_QUEUE_DIR
     temp_dir.mkdir(parents=True, exist_ok=True)
     
     for file in files:
@@ -33,10 +41,16 @@ async def init_project(
     imgsz: int = 960,
     model: str = "yolov8n.pt"
 ):
-    """Full project initialization from Label Studio ZIP."""
+    """
+    Initializes the PlantPilotAI environment from a Label Studio ZIP dataset.
+    
+    Accepts a compressed ZIP payload from the frontend, unpacks the dataset
+    components securely, normalizes all annotations into internal schema, and
+    triggers the primary foundational model training loop in the background.
+    """
     # Save zip
-    temp_zip = ML_DIR / "temp" / file.filename
-    temp_zip.parent.mkdir(exist_ok=True)
+    temp_zip = TEMP_DIR / file.filename
+    temp_zip.parent.mkdir(parents=True, exist_ok=True)
     with temp_zip.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
@@ -55,14 +69,29 @@ async def trigger_refinement(
     imgsz: int = 960,
     model: str = "yolov8n.pt"
 ):
-    """Trigger active learning refinement on the currently staged data."""
+    """
+    Start neural model refinement loop using queued active-learning definitions.
+    
+    Acts as a background trigger wrapper around the monolithic
+    active_learning_pipeline.py instance. Spawns pipeline synchronously inside 
+    a managed thread context instead of blocking frontend API responses.
+    """
     # Note: Fetch current settings or use defaults
     background_tasks.add_task(ml_service.run_training, epochs=epochs, imgsz=imgsz, model=model)
     return {"status": "success", "message": "Neural refinement started."}
 
 @router.post("/annotate")
 async def save_annotation(data: dict):
-    """Save a verified annotation to the training set."""
+    """
+    Saves reviewed detections and manual boxes from the review UI.
+
+    The FE sends accepted detections, rejected detections, and manually
+    drawn boxes. This route converts them into the label format used by
+    the ML training pipeline.
+    
+    Transforms standard UI absolute bounding parameters natively backwards
+    into normalized YOLO metrics.
+    """
     try:
         ml_service.save_annotation(
             filename=data['filename'],
@@ -87,8 +116,13 @@ def get_staged_stats():
 
 @router.get("/pending-images")
 def get_pending_images():
-    """List filenames currently in test_images awaiting review."""
-    temp_dir = ML_DIR / "data" / "test_images"
+    """
+    List filenames currently in the test queue awaiting manual review.
+    
+    Scans the UPLOADS/REVIEW target folders for pending structural files 
+    that safely identify as renderable images.
+    """
+    temp_dir = REVIEW_QUEUE_DIR
     if not temp_dir.exists(): return {"files": []}
     files = [f.name for f in temp_dir.glob("*") if f.suffix.lower() in [".jpg", ".jpeg", ".png"]]
     return {"files": files}

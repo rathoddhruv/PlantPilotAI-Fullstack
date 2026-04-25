@@ -53,7 +53,5 @@ def normalize_folder(images_dir, labels_dir):
             fixed += 1
     
     print(f"Finished normalization. Fixed {fixed} files.")
-
 if __name__ == "__main__":
-    # Default behavior for manual run
-    normalize_folder("data/yolo_merged/images/train", "data/yolo_merged/labels/train")
+    print("This file contains logic methods and shouldn't be executed directly. Route through fix_non_normalized_labels.py instead.")

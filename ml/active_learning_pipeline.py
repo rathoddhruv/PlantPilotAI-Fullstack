@@ -1,3 +1,29 @@
+"""
+File: active_learning_pipeline.py
+
+Purpose:
+Runs the active learning training flow for PlantPilotAI.
+
+This file takes human reviewed labels and manual annotations,
+merges them into the training dataset, retrains the YOLO model,
+archives the old model, and saves the new refined model as the
+current model.
+
+Reads from:
+- ML/data/test_images/ (or active_review queues)
+- ML/data/yolo_merged/
+- ML/models/current/
+
+Writes to:
+- ML/data/yolo_merged/
+- ML/models/current/
+- ML/models/history/
+- ML/runs/detect/train/
+
+Called by:
+- Flask BE when user clicks Accept and Train from the review UI.
+"""
+
 import argparse
 import json
 import os
@@ -8,7 +34,15 @@ from datetime import datetime
 from pathlib import Path
 
 import torch
-from config_loader import MODEL_PATH as CONFIG_MODEL_PATH
+from config_loader import (
+    MODEL_PATH, 
+    MODEL_HISTORY_DIR, 
+    RUNS_DIR, 
+    TRAINING_DATA_DIR, 
+    IMPORT_DATA_DIR,
+    TEMP_DIR,
+    ML_ROOT
+)
 from ultralytics import YOLO
 
 # Disable emojis for Windows terminal compatibility
@@ -16,29 +50,33 @@ USE_EMOJI = False
 from multiprocessing import freeze_support
 
 # Constants for absolute pathing
-ML_DIR = Path(__file__).resolve().parent
-ROOT_DIR = ML_DIR.parent
-RUNS_DETECT = ML_DIR / "runs" / "detect"
+RUNS_DETECT = RUNS_DIR / "detect"
 TRAIN_STABLE = RUNS_DETECT / "train"
 
 def get_device():
+    """Returns '0' if CUDA is available, otherwise 'cpu'."""
     return "0" if torch.cuda.is_available() else "cpu"
 
 def _archive_existing_train():
-    """move current runs/detect/train into runs/detect/archive/train_<timestamp>"""
+    """
+    Archives the previous YOLO training run to preserve history.
+    Moves RUNS_DIR/detect/train -> MODEL_HISTORY_DIR/train_<timestamp>
+    """
     if not TRAIN_STABLE.exists():
         return None
-    archive = RUNS_DETECT / "archive"
-    archive.mkdir(parents=True, exist_ok=True)
+    MODEL_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dst = archive / f"train_{ts}"
+    dst = MODEL_HISTORY_DIR / f"train_{ts}"
     shutil.move(str(TRAIN_STABLE), str(dst))
     print(f"archived previous train to: {dst}")
     return dst
 
 
 def _manifest_append(event: str, extra: dict):
-    """append a small record to runs/detect/manifest.json; never fail the pipeline"""
+    """
+    Appends execution metrics to a manifest file for backend status tracking.
+    Never fails the pipeline if the write fails.
+    """
     try:
         RUNS_DETECT.mkdir(parents=True, exist_ok=True)
         mf = RUNS_DETECT / "manifest.json"
@@ -98,8 +136,8 @@ if __name__ == '__main__':
     os.chdir(THIS_DIR)
 
     # absolute yaml paths avoid accidental cross-repo references
-    YOLO_DATASET_YAML_ABS = str((THIS_DIR / "yolo_dataset.yaml").resolve())
-    YOLO_MERGED_YAML_ABS = str((THIS_DIR / "yolo_merged.yaml").resolve())
+    YOLO_DATASET_YAML_ABS = str((ML_ROOT / "yolo_dataset.yaml").resolve())
+    YOLO_MERGED_YAML_ABS = str((ML_ROOT / "yolo_merged.yaml").resolve())
 
     def update_yaml_path(yaml_path, rel_data_path):
         """Force absolute path in YAML to avoid Ultralytics settings interference"""
@@ -155,11 +193,11 @@ if __name__ == '__main__':
 
     # === Step 0.5: Handle initial training from Label Studio dataset ===
     # if original dataset is present, train once, then rename folder to avoid retraining
-    dataset_root = Path("data/yolo_merged")
+    dataset_root = TRAINING_DATA_DIR
     dataset_yaml = YOLO_MERGED_YAML_ABS
 
-    initial_images = Path("data/yolo_dataset/images/train")
-    initial_labels = Path("data/yolo_dataset/labels/train")
+    initial_images = IMPORT_DATA_DIR / "images" / "train"
+    initial_labels = IMPORT_DATA_DIR / "labels" / "train"
 
     # Check if directories exist before trying to glob
     valid_initial_labels = []
@@ -273,8 +311,15 @@ if __name__ == '__main__':
     train_labels = list(merged_labels.glob("*.txt"))
 
     # === Step 2: get latest trained model path ===
-    def get_latest_model_path(base_dir="runs/detect"):
-        # search recursively under ml/runs/detect to find any best.pt
+    def get_latest_model_path(base_dir=RUNS_DETECT):
+        """
+        Returns the model path used for prediction.
+
+        Priority:
+        1. Current refined model (best.pt in runs/detect or MODELS_DIR)
+        2. Latest archived model
+        3. Base model
+        """
         base_dir = Path(base_dir)
         if not base_dir.exists():
             base_dir.mkdir(parents=True, exist_ok=True)
@@ -415,9 +460,9 @@ if __name__ == '__main__':
         # after training, backup old model and update MODEL_PATH with new best
         # Check the trained weights location (absolute path)
         final_best = (RUNS_DETECT / "train" / "weights" / "best.pt").resolve()
-        target_model = CONFIG_MODEL_PATH
+        target_model = MODEL_PATH
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_model = Path(f"temp/last_model_{timestamp}.pt")
+        backup_model = TEMP_DIR / f"last_model_{timestamp}.pt"
 
         if final_best.exists():
             backup_model.parent.mkdir(parents=True, exist_ok=True)
@@ -463,9 +508,9 @@ if __name__ == '__main__':
     shutil.rmtree(eval_dir / "post_active_learning", ignore_errors=True)
     eval_dir.mkdir(parents=True, exist_ok=True)
 
-    if CONFIG_MODEL_PATH.exists():
+    if MODEL_PATH.exists():
         print(f"Evaluating images using updated model...")
-        model = YOLO(str(CONFIG_MODEL_PATH))
+        model = YOLO(str(MODEL_PATH))
         try:
             results = model.predict(
                 source=str(merged_images),
