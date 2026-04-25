@@ -57,6 +57,15 @@ export class ReviewComponent implements OnInit, OnDestroy {
     currentDrawX = 0;
     currentDrawY = 0;
 
+    // Zoom & Pan State
+    zoomScale = 1;
+    offsetX = 0;
+    offsetY = 0;
+    isPanning = false;
+    isSpacePressed = false;
+    panStartX = 0;
+    panStartY = 0;
+
     classColors = [
         '#f59e0b', // amber-500
         '#3b82f6', // blue-500
@@ -80,6 +89,14 @@ export class ReviewComponent implements OnInit, OnDestroy {
                 if (res.classes && res.classes.length > 0) {
                     this.classNames = res.classes;
                     this.classOptions = res.classes;
+                    
+                    // Retroactively patch racing conditions if the model prediction arrived strictly before the global class list loaded:
+                    if (this.prediction?.detections) {
+                        this.prediction.detections.forEach(det => {
+                            det.class = this.normalizeClassName(det.class);
+                        });
+                        this.redraw();
+                    }
                 }
             },
             error: (err) => console.warn('Could not fetch classes:', err)
@@ -145,11 +162,63 @@ export class ReviewComponent implements OnInit, OnDestroy {
         });
     }
 
+    resetZoom() {
+        this.zoomScale = 1;
+        this.offsetX = 0;
+        this.offsetY = 0;
+        this.redraw();
+    }
+
+    zoomIn() {
+        this.setZoom(this.zoomScale * 1.5);
+    }
+
+    zoomOut() {
+        this.setZoom(this.zoomScale / 1.5);
+    }
+
+    setZoom(newZoom: number, focusX?: number, focusY?: number) {
+        if (!this.canvas) return;
+        newZoom = Math.max(1, Math.min(newZoom, 8));
+        
+        let cx = focusX;
+        let cy = focusY;
+        if (cx === undefined || cy === undefined) {
+             const rect = this.canvas.nativeElement.getBoundingClientRect();
+             cx = (rect.width * (this.canvas.nativeElement.width / rect.width)) / 2;
+             cy = (rect.height * (this.canvas.nativeElement.height / rect.height)) / 2;
+        }
+
+        const newOffsetX = cx - (cx - this.offsetX) * (newZoom / this.zoomScale);
+        const newOffsetY = cy - (cy - this.offsetY) * (newZoom / this.zoomScale);
+        
+        this.zoomScale = newZoom;
+        this.offsetX = newOffsetX;
+        this.offsetY = newOffsetY;
+        this.constrainPan();
+        this.redraw();
+    }
+
+    constrainPan() {
+        if (this.zoomScale === 1) {
+            this.offsetX = 0;
+            this.offsetY = 0;
+            return;
+        }
+        const canvas = this.canvas.nativeElement;
+        // The bounds of offsets depend on zoomed boundaries minus canvas width
+        const minOffsetX = canvas.width - (canvas.width * this.zoomScale);
+        const minOffsetY = canvas.height - (canvas.height * this.zoomScale);
+        
+        this.offsetX = Math.min(0, Math.max(minOffsetX, this.offsetX));
+        this.offsetY = Math.min(0, Math.max(minOffsetY, this.offsetY));
+    }
+
     private normalizeClassName(cls: string): string {
         const lower = cls.toLowerCase();
-        if (lower === 'dandelion') return 'Dandelion';
-        if (lower === 'hydrangea') return 'Hydrangea';
-        return cls;
+        // Dynamically find exact-case match inside the currently loaded dropdown arrays
+        const exactMatch = this.classNames.find(c => c.toLowerCase() === lower);
+        return exactMatch ? exactMatch : cls;
     }
 
     private loadImage(url: string) {
@@ -177,6 +246,11 @@ export class ReviewComponent implements OnInit, OnDestroy {
         }
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.save();
+        ctx.translate(this.offsetX, this.offsetY);
+        ctx.scale(this.zoomScale, this.zoomScale);
+
         ctx.drawImage(this.image, 0, 0);
 
         if (this.prediction) {
@@ -188,11 +262,10 @@ export class ReviewComponent implements OnInit, OnDestroy {
                 const color = this.getClassColor(cls);
 
                 ctx.strokeStyle = color;
-                ctx.lineWidth = Math.max(4, this.image.width * 0.005);
+                ctx.lineWidth = Math.max(2, (this.image.width * 0.005) / this.zoomScale);
                 
-                // For manual labels, maybe distinct
                 if (det.isManual) {
-                    ctx.setLineDash([10, 10]);
+                    ctx.setLineDash([10 / this.zoomScale, 10 / this.zoomScale]);
                 } else {
                     ctx.setLineDash([]);
                 }
@@ -200,7 +273,7 @@ export class ReviewComponent implements OnInit, OnDestroy {
                 ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
                 ctx.setLineDash([]);
 
-                const fontSize = Math.max(16, this.image.width * 0.02);
+                const fontSize = Math.max(12, (this.image.width * 0.02) / this.zoomScale);
                 ctx.font = `bold ${fontSize}px Inter, sans-serif`;
                 const text = `${i + 1}. ${det.class}`;
                 const pad = fontSize * 0.5;
@@ -214,16 +287,17 @@ export class ReviewComponent implements OnInit, OnDestroy {
             });
         }
 
-        // Draw the temporary rect if actively drawing
         if (this.isDrawing) {
             ctx.strokeStyle = this.classNames.length ? this.getClassColor(this.classNames[0]) : '#10b981';
-            ctx.lineWidth = Math.max(2, this.image.width * 0.003);
-            ctx.setLineDash([10, 10]);
+            ctx.lineWidth = Math.max(1, (this.image.width * 0.003) / this.zoomScale);
+            ctx.setLineDash([10 / this.zoomScale, 10 / this.zoomScale]);
             const w = this.currentDrawX - this.drawStartX;
             const h = this.currentDrawY - this.drawStartY;
             ctx.strokeRect(this.drawStartX, this.drawStartY, w, h);
             ctx.setLineDash([]);
         }
+        
+        ctx.restore();
     }
 
     toggleIgnore(det: any) {
@@ -243,79 +317,122 @@ export class ReviewComponent implements OnInit, OnDestroy {
      * YOLO training needs coordinates based on the real image dimensions, not the
      * displayed browser size.
      */
-    getEventCoords(e: MouseEvent) {
+    getCanvasCoords(e: MouseEvent) {
         const canvas = this.canvas.nativeElement;
         const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
+        
+        // Account for object-contain letterboxing natively
+        const xRatio = rect.width / canvas.width;
+        const yRatio = rect.height / canvas.height;
+        const renderRatio = Math.min(xRatio, yRatio);
+        
+        const renderedWidth = canvas.width * renderRatio;
+        const renderedHeight = canvas.height * renderRatio;
+        const boundOffsetX = (rect.width - renderedWidth) / 2;
+        const boundOffsetY = (rect.height - renderedHeight) / 2;
+        
         return {
-            x: (e.clientX - rect.left) * scaleX,
-            y: (e.clientY - rect.top) * scaleY
+            x: (e.clientX - rect.left - boundOffsetX) / renderRatio,
+            y: (e.clientY - rect.top - boundOffsetY) / renderRatio
         };
     }
 
-    /**
-     * Engages the visual manual annotation crosshair bounding drawing.
-     * Listens explicitly to Ctrl+Click to prevent accidental drags on the viewport.
-     */
-    startDraw(e: MouseEvent) {
-        if (!e.ctrlKey || this.isLoading || this.isTestMode) return;
-        const coords = this.getEventCoords(e);
-        this.isDrawing = true;
-        this.drawStartX = coords.x;
-        this.drawStartY = coords.y;
-        this.currentDrawX = coords.x;
-        this.currentDrawY = coords.y;
+    getEventCoords(e: MouseEvent) {
+        const c = this.getCanvasCoords(e);
+        return {
+            x: (c.x - this.offsetX) / this.zoomScale,
+            y: (c.y - this.offsetY) / this.zoomScale
+        };
     }
-
-    /**
-     * Refreshes the canvas context live while dragging to render visually
-     * the dashed rectangle of the currently dragged manual annotation.
-     */
-    onDraw(e: MouseEvent) {
-        if (!this.isDrawing) return;
-        const coords = this.getEventCoords(e);
-        this.currentDrawX = coords.x;
-        this.currentDrawY = coords.y;
-        this.redraw();
-    }
-
-    /**
-     * Finalizes the bounding coordinates, strips out accidental tiny clicks,
-     * and maps exactly into an internal `.detections` formatted object identically
-     * to how native YOLO bounding structures are defined.
-     */
-    endDraw(e: MouseEvent) {
-        if (!this.isDrawing) return;
-        this.isDrawing = false;
-        const coords = this.getEventCoords(e);
+    
+    onWheel(e: WheelEvent) {
+        if(e.target !== this.canvas?.nativeElement) return;
+        e.preventDefault(); 
         
-        const x1 = Math.min(this.drawStartX, coords.x);
-        const y1 = Math.min(this.drawStartY, coords.y);
-        const x2 = Math.max(this.drawStartX, coords.x);
-        const y2 = Math.max(this.drawStartY, coords.y);
+        const zoomDelta = e.deltaY < 0 ? 1.2 : 0.8;
+        const c = this.getCanvasCoords(e as MouseEvent);
+        this.setZoom(this.zoomScale * zoomDelta, c.x, c.y);
+    }
 
-        // Filter out accidental clicks
-        if (x2 - x1 > 5 && y2 - y1 > 5) {
-            if (!this.prediction) {
-                // Should exist but just in case
-                return;
+    onMouseDown(e: MouseEvent) {
+        if (this.isSpacePressed || e.button === 1) { // Middle click or Space
+            e.preventDefault();
+            this.isPanning = true;
+            this.panStartX = e.clientX;
+            this.panStartY = e.clientY;
+            return;
+        }
+
+        if (e.ctrlKey && !this.isLoading && !this.isTestMode) {
+            const coords = this.getEventCoords(e);
+            this.isDrawing = true;
+            this.drawStartX = coords.x;
+            this.drawStartY = coords.y;
+            this.currentDrawX = coords.x;
+            this.currentDrawY = coords.y;
+        }
+    }
+
+    onMouseMove(e: MouseEvent) {
+        if (this.isPanning) {
+            const canvas = this.canvas.nativeElement;
+            const rect = canvas.getBoundingClientRect();
+            // Scale drag distances to native canvas resolution
+            const renderRatio = Math.min(rect.width / canvas.width, rect.height / canvas.height);
+            
+            const dx = (e.clientX - this.panStartX) / renderRatio;
+            const dy = (e.clientY - this.panStartY) / renderRatio;
+            
+            this.offsetX += dx;
+            this.offsetY += dy;
+            this.panStartX = e.clientX;
+            this.panStartY = e.clientY;
+            this.constrainPan();
+            this.redraw();
+            return;
+        }
+
+        if (this.isDrawing) {
+            const coords = this.getEventCoords(e);
+            this.currentDrawX = coords.x;
+            this.currentDrawY = coords.y;
+            this.redraw();
+        }
+    }
+
+    onMouseUp(e: MouseEvent) {
+        if (this.isPanning) {
+            this.isPanning = false;
+            return;
+        }
+
+        if (this.isDrawing) {
+            this.isDrawing = false;
+            const coords = this.getEventCoords(e);
+            
+            const x1 = Math.min(this.drawStartX, coords.x);
+            const y1 = Math.min(this.drawStartY, coords.y);
+            const x2 = Math.max(this.drawStartX, coords.x);
+            const y2 = Math.max(this.drawStartY, coords.y);
+
+            // Filter out accidental clicks
+            if (x2 - x1 > 5 && y2 - y1 > 5 && this.prediction) {
+                this.prediction.detections.push({
+                    class: this.lastSelectedClass || (this.classNames[0] || 'Unknown'),
+                    confidence: 1.0,
+                    box: [x1, y1, x2, y2],
+                    ignore: false,
+                    isManual: true
+                });
+                this.highlightedIndex = this.prediction.detections.length - 1;
             }
             
-            this.prediction.detections.push({
-                class: this.lastSelectedClass || (this.classNames[0] || 'Unknown'),
-                confidence: 1.0,
-                box: [x1, y1, x2, y2],
-                ignore: false,
-                isManual: true
-            });
-            this.highlightedIndex = this.prediction.detections.length - 1;
+            this.redraw();
         }
-        
-        this.redraw();
     }
 
-    cancelDraw() {
+    onMouseLeave(e: MouseEvent) {
+        this.isPanning = false;
         if (this.isDrawing) {
             this.isDrawing = false;
             this.redraw();
@@ -358,6 +475,13 @@ export class ReviewComponent implements OnInit, OnDestroy {
 
     @HostListener('window:keydown', ['$event'])
     handleKeyboardEvent(event: KeyboardEvent) {
+        if (event.code === 'Space') {
+            this.isSpacePressed = true;
+            if((event.target as HTMLElement)?.tagName !== 'INPUT') {
+                event.preventDefault(); // prevent scroll
+            }
+        }
+        
         if (event.key === 'Control') {
             this.isCtrlPressed = true;
         }
@@ -400,6 +524,9 @@ export class ReviewComponent implements OnInit, OnDestroy {
 
     @HostListener('window:keyup', ['$event'])
     handleKeyUp(event: KeyboardEvent) {
+        if (event.code === 'Space') {
+            this.isSpacePressed = false;
+        }
         if (event.key === 'Control') {
             this.isCtrlPressed = false;
         }
