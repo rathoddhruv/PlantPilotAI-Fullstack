@@ -239,6 +239,42 @@ class MLService:
                 })
         return detections
 
+    def _get_or_create_class_id(self, class_name: str) -> int:
+        from ML.config_loader import CLASS_FILE
+        # 1. Read existing classes from file if exists
+        classes = []
+        if CLASS_FILE.exists():
+            classes = [line.strip() for line in CLASS_FILE.read_text(encoding="utf-8").splitlines() if line.strip()]
+        
+        # 2. Check if class exists in file (case insensitive match)
+        target = class_name.lower().strip()
+        for idx, nm in enumerate(classes):
+            if nm.lower().strip() == target:
+                return idx
+        
+        # 3. Check if class exists in model memory
+        if self.model and hasattr(self.model, 'names'):
+            for idx, nm in self.model.names.items():
+                if str(nm).lower().strip() == target:
+                    # Sync to file and return
+                    found_exact = False
+                    for existing in classes:
+                        if existing.lower().strip() == target:
+                            found_exact = True
+                            break
+                    if not found_exact:
+                        classes.append(str(nm))
+                        CLASS_FILE.write_text("\n".join(classes), encoding="utf-8")
+                    return int(idx)
+        
+        # 4. It's truly a new class, append it
+        classes.append(class_name.strip())
+        CLASS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        CLASS_FILE.write_text("\n".join(classes), encoding="utf-8")
+        
+        self.log_message(f"✨ New class '{class_name}' appended to dataset mapping (ID: {len(classes)-1})")
+        return len(classes) - 1
+
     def save_annotation(self, filename: str, detections: list, width: int, height: int):
         """
         Save a user-verified annotation to the training set.
@@ -265,18 +301,14 @@ class MLService:
         if not self.model:
             self.load_model()
 
-        # Create case-insensitive reverse map for names
-        name_to_id = {str(v).lower(): k for k, v in self.model.names.items()}
-        self.log_message(f"DEBUG: Model Names: {self.model.names}")
-
         with label_path.open("w") as f:
             for det in detections:
-                class_name = str(det['class']).lower()
-                if class_name not in name_to_id:
-                    self.log_message(f"Unknown class {class_name}, skipping. Avail: {list(name_to_id.keys())}")
+                class_name = str(det['class']).strip()
+                if not class_name:
                     continue
 
-                cid = name_to_id[class_name]
+                cid = self._get_or_create_class_id(class_name)
+
                 if 'poly' in det and det['poly']:
                     # OBB/Seg Format: class x1 y1 x2 y2 ... (normalized)
                     poly_str = " ".join([f"{p:.6f}" for p in det['poly']])

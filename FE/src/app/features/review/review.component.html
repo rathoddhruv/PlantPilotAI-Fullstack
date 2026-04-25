@@ -144,10 +144,11 @@
                             </div>
 
                             <div class="mt-1 flex items-center gap-2" *ngIf="!isTestMode">
-                                <select [(ngModel)]="det.class" (change)="redraw()" [disabled]="!!det.ignore"
+                                <select [(ngModel)]="det.class" (change)="onClassChange(det, $event)" [disabled]="!!det.ignore"
                                     class="flex-1 bg-[#1e293b] border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none">
                                     <option *ngFor="let name of classNames" [value]="name">{{ name }}
                                     </option>
+                                    <option value="__ADD_NEW__" class="font-bold text-indigo-400">+ Add new class...</option>
                                 </select>
                                 <button *ngIf="det.isManual" (click)="deleteDetection(i)"
                                     class="p-[1px] px-2 text-[9px] bg-red-500/20 text-red-400 border border-red-500/30 rounded hover:bg-red-500/40 hover:text-red-300 font-bold uppercase transition shadow-sm"
@@ -198,5 +199,19 @@
         class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-2 rounded-lg shadow-2xl flex items-center gap-3 animate-fade-in-up z-50 border border-indigo-400/30 font-bold text-[11px]">
         <span class="w-4 h-4 bg-white/20 rounded-full flex items-center justify-center text-[8px]">✓</span>
         {{ toastMessage }}
+    </div>
+
+    <!-- Add New Class Modal -->
+    <div *ngIf="isAddingNewClass" class="fixed inset-0 z-[100] flex items-center justify-center bg-[#020617]/80 backdrop-blur-sm">
+        <div class="bg-[#0f172a] border border-slate-700 rounded-xl p-6 w-96 shadow-2xl shadow-black/80 ring-1 ring-white/10">
+            <h3 class="text-white font-bold tracking-tight mb-4 text-base">Add New Concept</h3>
+            <input type="text" [(ngModel)]="newClassName" placeholder="e.g. Tomato, Weed, Leaf..." 
+                class="w-full bg-[#1e293b] border border-slate-600 text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none mb-5 font-medium transition-all" 
+                (keyup.enter)="confirmNewClass()">
+            <div class="flex justify-end gap-3">
+                <button (click)="cancelNewClass()" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors uppercase tracking-widest">Cancel</button>
+                <button (click)="confirmNewClass()" class="px-5 py-2 text-xs font-black bg-indigo-600 shadow-lg shadow-indigo-600/20 text-white rounded-lg hover:bg-indigo-500 uppercase tracking-widest transition-all">Create Class</button>
+            </div>
+        </div>
     </div>
 </div>

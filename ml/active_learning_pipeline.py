@@ -96,15 +96,12 @@ def _manifest_append(event: str, extra: dict):
 
 
 def _sync_yaml(yaml_path: Path, data_path: Path):
-    """Update YAML path and names from classes.txt; data_path relative to ml/"""
+    """Update YAML path and names from global CLASS_FILE; data_path relative to ml/"""
+    from config_loader import CLASS_FILE
     try:
-        classes_file = data_path / "classes.txt"
-        if not classes_file.exists():
-            classes_file = data_path / "labels" / "train" / "classes.txt"
-        
         names_dict = {}
-        if classes_file.exists():
-            lines = classes_file.read_text(encoding="utf-8").splitlines()
+        if CLASS_FILE.exists():
+            lines = CLASS_FILE.read_text(encoding="utf-8").splitlines()
             names_dict = {i: line.strip() for i, line in enumerate(lines) if line.strip()}
         
         if not names_dict:

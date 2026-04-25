@@ -38,6 +38,11 @@ export class ReviewComponent implements OnInit, OnDestroy {
     classOptions = ['Dandelion', 'Hydrangea'];
     classNames = ['Dandelion', 'Hydrangea'];
 
+    lastSelectedClass: string | null = null;
+    isAddingNewClass: boolean = false;
+    newClassName: string = '';
+    targetDetectionForNewClass: any = null;
+
     constructor(
         private api: ApiService,
         private reviewQueue: ReviewQueueService,
@@ -295,7 +300,7 @@ export class ReviewComponent implements OnInit, OnDestroy {
             }
             
             this.prediction.detections.push({
-                class: this.classNames[0] || 'Unknown',
+                class: this.lastSelectedClass || (this.classNames[0] || 'Unknown'),
                 confidence: 1.0,
                 box: [x1, y1, x2, y2],
                 ignore: false,
@@ -312,6 +317,40 @@ export class ReviewComponent implements OnInit, OnDestroy {
             this.isDrawing = false;
             this.redraw();
         }
+    }
+
+    onClassChange(det: any, event: any) {
+        if (det.class === '__ADD_NEW__') {
+            this.isAddingNewClass = true;
+            this.newClassName = '';
+            this.targetDetectionForNewClass = det;
+            det.class = this.lastSelectedClass || (this.classNames[0] || 'Unknown');
+        } else {
+            this.lastSelectedClass = det.class;
+            this.redraw();
+        }
+    }
+
+    confirmNewClass() {
+        const trimmed = this.newClassName.trim();
+        if (trimmed) {
+            if (!this.classNames.includes(trimmed)) {
+                this.classNames.push(trimmed);
+            }
+            if (this.targetDetectionForNewClass) {
+                this.targetDetectionForNewClass.class = trimmed;
+                this.lastSelectedClass = trimmed;
+            }
+        }
+        this.isAddingNewClass = false;
+        this.targetDetectionForNewClass = null;
+        this.redraw();
+    }
+
+    cancelNewClass() {
+        this.isAddingNewClass = false;
+        this.targetDetectionForNewClass = null;
+        this.redraw();
     }
 
     @HostListener('window:keydown', ['$event'])

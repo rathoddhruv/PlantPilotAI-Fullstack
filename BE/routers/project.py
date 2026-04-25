@@ -129,13 +129,26 @@ def get_pending_images():
 
 @router.get("/classes")
 def get_classes():
-    """Extract class names from the currently loaded model."""
+    """Extract class names from the currently loaded model and the global tracker."""
+    from ML.config_loader import CLASS_FILE
+    
+    classes = set()
+    
+    # 1. Load from tracking file
+    if CLASS_FILE.exists():
+        for line in CLASS_FILE.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                classes.add(line.strip())
+                
+    # 2. Add from running model memory
     if not ml_service.model: 
         ml_service.load_model()
     
     if ml_service.model and hasattr(ml_service.model, 'names'):
-        return {"classes": list(ml_service.model.names.values())}
-    return {"classes": []}
+        for val in ml_service.model.names.values():
+            classes.add(str(val))
+            
+    return {"classes": list(classes)}
 
 @router.get("/logs")
 def get_logs():
