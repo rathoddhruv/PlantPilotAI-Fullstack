@@ -84,28 +84,18 @@
                 </div>
 
                 <!-- Compact Floating HUD -->
-                <div
-                    class="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-slate-700 flex items-center gap-6 pointer-events-none shadow-2xl">
+                <div class="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-slate-700 flex items-center gap-6 pointer-events-none shadow-2xl">
                     <div class="flex items-center gap-2">
-                        <kbd
-                            class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[9px] border border-slate-600">A</kbd>
+                        <kbd class="bg-emerald-900/50 text-emerald-400 px-1.5 py-0.5 rounded text-[9px] border border-emerald-500/30">C</kbd>
+                        <span class="text-[9px] text-emerald-500/80 uppercase font-bold">Valid</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <kbd class="bg-red-900/50 text-red-400 px-1.5 py-0.5 rounded text-[9px] border border-red-500/30">X</kbd>
+                        <span class="text-[9px] text-red-500/80 uppercase font-bold">Wrong</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <kbd class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[9px] border border-slate-600">S</kbd>
                         <span class="text-[9px] text-slate-400 uppercase font-bold">Skip</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <kbd
-                            class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[9px] border border-slate-600">D</kbd>
-                        <span class="text-[9px] text-slate-400 uppercase font-bold">Accept</span>
-                    </div>
-                    <div class="h-3 w-[1px] bg-slate-700"></div>
-                    <div class="flex items-center gap-2">
-                        <kbd
-                            class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[9px] border border-slate-600">C</kbd>
-                        <span class="text-[9px] text-slate-400 uppercase font-bold">All Yes</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <kbd
-                            class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[9px] border border-slate-600">X</kbd>
-                        <span class="text-[9px] text-slate-400 uppercase font-bold">All No</span>
                     </div>
                 </div>
             </div>
@@ -128,49 +118,69 @@
             </div>
 
             <div class="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar bg-[#0f172a]/20">
+                <!-- Tools / Settings -->
+                <div class="flex items-center justify-between px-2 mb-2 pb-2 border-b border-slate-700/50">
+                    <label class="flex items-center gap-2 cursor-pointer group">
+                        <input type="checkbox" [(ngModel)]="showDefaultClasses" (change)="redraw()"
+                            class="w-3.5 h-3.5 rounded border-slate-600 text-slate-500 focus:ring-slate-500 bg-slate-800 cursor-pointer">
+                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest group-hover:text-slate-400 transition-colors">Show Default Classes</span>
+                    </label>
+                </div>
+
                 <!-- Batch Controls -->
                 <div class="grid grid-cols-2 gap-2 mb-3 px-1">
                     <button (click)="markAll(true)"
                         class="px-2 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[8px] font-black rounded-lg hover:bg-emerald-500/20 transition-all uppercase tracking-widest">
-                        ✅ ALL YES (C)
+                        ✅ ACCEPT ALL (A)
                     </button>
                     <button (click)="markAll(false)"
                         class="px-2 py-1.5 bg-red-500/10 border border-red-500/30 text-red-400 text-[8px] font-black rounded-lg hover:bg-red-500/20 transition-all uppercase tracking-widest">
-                        ❌ ALL NO (X)
+                        ❌ REJECT ALL (R)
                     </button>
                 </div>
 
                 <div *ngFor="let det of prediction?.detections; let i = index"
-                    class="bg-[#0f172a]/60 border border-slate-700/50 p-2 rounded-lg transition-all hover:bg-slate-800/50 group relative"
-                    [class.opacity-40]="det.ignore" [class.ring-2]="i === highlightedIndex"
-                    [class.ring-indigo-500]="i === highlightedIndex" [class.z-20]="i === highlightedIndex">
+                    (click)="setActiveIndex(i)"
+                    [class.hidden]="!showDefaultClasses && det.isDefaultYolo"
+                    class="border p-2 rounded-lg transition-all cursor-pointer relative"
+                    [ngClass]="{
+                        'border-indigo-500 ring-2 ring-indigo-500 bg-slate-800 shadow-xl z-20': i === activeIndex,
+                        'border-emerald-500/50 bg-emerald-950/20': det.reviewStatus === 'correct' && i !== activeIndex,
+                        'border-red-500/50 bg-red-950/20': det.reviewStatus === 'wrong' && i !== activeIndex,
+                        'border-slate-600/50 bg-slate-900/40 opacity-60': det.reviewStatus === 'skipped' && i !== activeIndex,
+                        'border-slate-700/50 bg-[#0f172a]/60 hover:bg-slate-800/50': det.reviewStatus === 'pending' && i !== activeIndex
+                    }">
 
                     <div class="flex items-center gap-2 relative z-10">
-                        <input type="checkbox" [checked]="!det.ignore" (change)="toggleIgnore(det)"
-                            class="w-3.5 h-3.5 rounded border-slate-600 text-indigo-600 focus:ring-indigo-500 bg-slate-800 cursor-pointer">
+                        <div class="flex flex-col items-center justify-center w-5 flex-shrink-0">
+                            <span *ngIf="det.reviewStatus === 'pending'" class="text-blue-400 font-black text-[12px]">-</span>
+                            <span *ngIf="det.reviewStatus === 'correct'" class="text-emerald-500 font-bold text-[14px]">✓</span>
+                            <span *ngIf="det.reviewStatus === 'wrong'" class="text-red-500 font-bold text-[14px]">✗</span>
+                            <span *ngIf="det.reviewStatus === 'skipped'" class="text-slate-400 font-black text-[10px]">⊘</span>
+                        </div>
 
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center justify-between">
-                                <h4
-                                    class="text-[11px] font-bold text-slate-200 truncate capitalize group-hover:text-indigo-400 transition-colors">
-                                    <span class="text-slate-600 mr-1 font-mono text-[9px]">{{ i + 1 }}.</span> {{
-                                    det.class }}
+                                <h4 class="text-[11px] font-bold truncate capitalize transition-colors"
+                                    [ngClass]="i === activeIndex ? 'text-indigo-300' : 'text-slate-200'">
+                                    <span class="text-slate-500 mr-1 font-mono text-[9px]">{{ i + 1 }}.</span> {{ det.class }}
+                                    <span *ngIf="det.isDefaultYolo" class="text-[9px] text-slate-500 ml-1">(Auto)</span>
                                 </h4>
-                                <span class="text-[9px] text-slate-500 font-mono">{{ (det.confidence * 100).toFixed(0)
-                                    }}%</span>
+                                <span class="text-[9px] font-mono" [ngClass]="i === activeIndex ? 'text-indigo-400' : 'text-slate-500'">
+                                    {{ (det.confidence * 100).toFixed(0) }}%
+                                </span>
                             </div>
 
                             <div class="mt-1 flex items-center gap-2" *ngIf="!isTestMode">
-                                <select [(ngModel)]="det.class" (change)="onClassChange(det, $event)" [disabled]="!!det.ignore"
+                                <select [(ngModel)]="det.class" (change)="onClassChange(det, $event)" (click)="$event.stopPropagation()"
                                     class="flex-1 bg-[#1e293b] border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none">
-                                    <option *ngFor="let name of classNames" [value]="name">{{ name }}
-                                    </option>
+                                    <option *ngFor="let name of classNames" [value]="name">{{ name }}</option>
                                     <option value="__ADD_NEW__" class="font-bold text-indigo-400">+ Add new class...</option>
                                 </select>
-                                <button *ngIf="det.isManual" (click)="deleteDetection(i)"
-                                    class="p-[1px] px-2 text-[9px] bg-red-500/20 text-red-400 border border-red-500/30 rounded hover:bg-red-500/40 hover:text-red-300 font-bold uppercase transition shadow-sm"
+                                <button *ngIf="det.isManual" (click)="deleteDetection(i); $event.stopPropagation()"
+                                    class="p-[1px] px-2 text-[9px] bg-slate-800 text-slate-400 border border-slate-700 rounded hover:bg-red-500/40 hover:text-red-300 hover:border-red-500/30 font-bold uppercase transition shadow-sm"
                                     title="Delete Manual Detection">
-                                    Delete
+                                    Del
                                 </button>
                             </div>
                         </div>
@@ -188,25 +198,31 @@
 
             <!-- Bottom Command Center (New Position) -->
             <div class="p-3 border-t border-slate-700 bg-slate-800/50 space-y-2">
-                <div class="grid grid-cols-2 gap-2">
-                    <button (click)="skip()" [disabled]="isLoading"
-                        class="flex flex-col items-center justify-center py-2 bg-slate-700/30 hover:bg-slate-600 text-slate-300 border border-slate-600/50 rounded-lg transition-all disabled:opacity-50 group"
-                        title="Skip Image (A/Backspace)">
-                        <span class="text-[10px] font-black tracking-widest uppercase">Skip Image</span>
-                        <span class="text-[8px] opacity-50 font-mono">BACKSPACE</span>
-                    </button>
-                    <button (click)="accept()" [disabled]="isLoading"
-                        class="flex flex-col items-center justify-center py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-all shadow-lg shadow-emerald-900/40 disabled:opacity-50 group"
-                        title="Accept & Train (Enter)">
-                        <span class="text-[10px] font-black tracking-widest uppercase">{{ isLoading ? 'Saving...' :
-                            'Accept' }}</span>
-                        <span class="text-[8px] opacity-70 font-mono">ENTER</span>
-                    </button>
+                <div *ngIf="prediction && activeIndex !== null && prediction.detections[activeIndex]" 
+                    class="bg-slate-900/60 border border-slate-700 rounded p-2 text-center mb-1">
+                    <span class="text-[9px] uppercase tracking-widest text-slate-500 block mb-1">Active Focus</span>
+                    <span class="text-indigo-400 font-mono text-[10px] font-bold mr-1">Det {{ activeIndex + 1 }} :</span>
+                    <span class="text-slate-300 text-[10px] uppercase font-bold">{{ prediction.detections[activeIndex].class }}</span>
+                </div>
+                
+                <div class="grid grid-cols-3 gap-1 mb-2">
+                    <button (click)="markActive('correct')" class="py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded hover:bg-emerald-500/20 font-bold text-[9px] uppercase tracking-tighter">Correct (C)</button>
+                    <button (click)="markActive('wrong')" class="py-1.5 bg-red-500/10 text-red-400 border border-red-500/30 rounded hover:bg-red-500/20 font-bold text-[9px] uppercase tracking-tighter">Wrong (X)</button>
+                    <button (click)="markActive('skipped')" class="py-1.5 bg-slate-500/10 text-slate-400 border border-slate-500/30 rounded hover:bg-slate-500/20 font-bold text-[9px] uppercase tracking-tighter">Skip (S)</button>
                 </div>
 
-                <p class="text-[9px] text-indigo-400/80 text-center uppercase tracking-tighter font-bold">
-                    ✦ Hold CTRL & drag on image to manually annotate missed objects
-                </p>
+                <div class="grid grid-cols-2 gap-2 mt-4">
+                    <button (click)="skip()" [disabled]="isLoading"
+                        class="flex flex-col items-center justify-center py-2 bg-slate-700/30 hover:bg-slate-600 text-slate-300 border border-slate-600/50 rounded-lg transition-all disabled:opacity-50 group">
+                        <span class="text-[9px] font-black tracking-widest uppercase">Skip Image</span>
+                    </button>
+                    <button (click)="accept()" [disabled]="isLoading"
+                        class="flex flex-col items-center justify-center py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-all shadow-lg group">
+                        <span class="text-[9px] font-black tracking-widest uppercase">{{ isLoading ? 'Saving...' :
+                            'Save & Train' }}</span>
+                        <span class="text-[7px] opacity-70 font-mono">ENTER</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

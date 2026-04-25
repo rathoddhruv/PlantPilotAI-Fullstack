@@ -72,6 +72,10 @@ export class ReviewComponent implements OnInit, OnDestroy {
     lastMouseX = 0;
     lastMouseY = 0;
     hoverRectIndex: number | null = null;
+    activeIndex: number | null = 0;
+    
+    // Display Preferences
+    showDefaultClasses = false;
 
     classColors = [
         '#f59e0b', // amber-500
@@ -153,11 +157,23 @@ export class ReviewComponent implements OnInit, OnDestroy {
         this.api.predict(item.file).subscribe({
             next: (res: any) => {
                 this.isLoading = false;
-                res.detections = res.detections.map((d: any) => ({
-                    ...d,
-                    class: this.normalizeClassName(d.class),
-                    ignore: false
-                }));
+                res.detections = res.detections.map((d: any) => {
+                    const normalizedClass = this.normalizeClassName(d.class);
+                    // Detections not strictly matching the backend taxonomy list are flagged as defaults.
+                    const isCustomClass = this.classNames.some(c => c.toLowerCase() === normalizedClass.toLowerCase());
+                    return {
+                        ...d,
+                        class: normalizedClass,
+                        isDefaultYolo: !isCustomClass,
+                        // Standardize initial review queues safely pushing out implicit omissions
+                        reviewStatus: 'pending'
+                    };
+                });
+                
+                // Mount focus strictly onto the first logically displayed visual bounding instance natively
+                this.activeIndex = res.detections.findIndex((d: any) => this.showDefaultClasses || !d.isDefaultYolo);
+                if (this.activeIndex === -1 && res.detections.length) this.activeIndex = 0;
+
                 this.prediction = res;
                 this.loadImage(res.url);
             },
@@ -262,14 +278,34 @@ export class ReviewComponent implements OnInit, OnDestroy {
 
         if (this.prediction) {
             this.prediction.detections.forEach((det: any, i: number) => {
-                if (det.ignore) return;
+                // If it's a default class and the toggle is off, force hide everywhere.
+                if (det.isDefaultYolo && !this.showDefaultClasses) return;
+                
+                // If it's skipped/wrong but NOT a default YOLO prediction we're previewing, hide standard rejected things.
+                if ((det.reviewStatus === 'wrong' || det.reviewStatus === 'skipped') && !det.isDefaultYolo) return;
 
                 const [x1, y1, x2, y2] = det.box;
                 const cls = det.class;
-                const color = this.getClassColor(cls);
+                const textBgColor = this.getClassColor(cls);
 
-                ctx.strokeStyle = color;
-                ctx.lineWidth = Math.max(2, (this.image.width * 0.005) / this.zoomScale);
+                // Per-detection border rules based entirely on explicitly configured human actions
+                let strokeColor = '#3b82f6'; // Pending (Blue/Yellow variant request, using blue-500)
+                if (det.reviewStatus === 'correct') strokeColor = '#10b981'; // Green
+                if (det.reviewStatus === 'wrong') strokeColor = '#ef4444'; // Red
+                if (det.reviewStatus === 'skipped') strokeColor = '#64748b'; // Slate
+                
+                const isActive = (i === this.activeIndex);
+
+                if (isActive) {
+                    ctx.shadowColor = strokeColor;
+                    ctx.shadowBlur = 10;
+                    ctx.lineWidth = Math.max(3, (this.image.width * 0.006) / this.zoomScale);
+                } else {
+                    ctx.shadowBlur = 0;
+                    ctx.lineWidth = Math.max(2, (this.image.width * 0.003) / this.zoomScale);
+                }
+                
+                ctx.strokeStyle = strokeColor;
                 
                 if (det.isManual) {
                     ctx.setLineDash([10 / this.zoomScale, 10 / this.zoomScale]);
@@ -277,20 +313,29 @@ export class ReviewComponent implements OnInit, OnDestroy {
                     ctx.setLineDash([]);
                 }
                 
+                // Dim rejected items cleanly
+                if (det.reviewStatus === 'wrong' || det.reviewStatus === 'skipped') {
+                    ctx.globalAlpha = 0.4;
+                }
+                
                 ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
                 ctx.setLineDash([]);
+                ctx.shadowBlur = 0; // Prevent text blowing out
 
                 const fontSize = Math.max(12, (this.image.width * 0.02) / this.zoomScale);
                 ctx.font = `bold ${fontSize}px Inter, sans-serif`;
-                const text = `${i + 1}. ${det.class}`;
+                const text = `${i + 1}. ${det.class}${det.isDefaultYolo ? ' (Auto)' : ''}`;
                 const pad = fontSize * 0.5;
                 const textMetrics = ctx.measureText(text);
 
-                ctx.fillStyle = color;
+                ctx.fillStyle = textBgColor;
                 ctx.fillRect(x1, y1 - fontSize - pad * 1.5, textMetrics.width + pad * 2, fontSize + pad * 2);
 
                 ctx.fillStyle = '#ffffff';
                 ctx.fillText(text, x1 + pad, y1 - pad * 0.5);
+                
+                // Restore transparency
+                ctx.globalAlpha = 1.0;
             });
         }
 
@@ -356,7 +401,7 @@ export class ReviewComponent implements OnInit, OnDestroy {
         if (!this.prediction) return null;
         for (let i = this.prediction.detections.length - 1; i >= 0; i--) {
             const det = this.prediction.detections[i];
-            if (det.ignore || !det.isManual) continue; 
+            if (det.reviewStatus === 'wrong' || (!det.isManual && det.reviewStatus === 'skipped')) continue; 
             const [x1, y1, x2, y2] = det.box;
             if (coords.x >= x1 && coords.x <= x2 && coords.y >= y1 && coords.y <= y2) {
                 return i;
@@ -487,10 +532,11 @@ export class ReviewComponent implements OnInit, OnDestroy {
                     class: this.lastSelectedClass || (this.classNames[0] || 'Unknown'),
                     confidence: 1.0,
                     box: [x1, y1, x2, y2],
-                    ignore: false,
+                    reviewStatus: 'pending',
                     isManual: true
                 });
-                this.highlightedIndex = this.prediction.detections.length - 1;
+                // Mount active index mapping automatically onto the dynamically injected manual overlay natively
+                this.activeIndex = this.prediction.detections.length - 1;
             }
             
             this.redraw();
@@ -579,36 +625,53 @@ export class ReviewComponent implements OnInit, OnDestroy {
 
         const key = event.key.toLowerCase();
         
-        // 1-9 for Class Assignment or Toggling
-        const num = parseInt(key);
-        if (!isNaN(num) && num > 0) {
-            // If user is hovering over a detection or we have a single detection, change class?
-            // Existing logic: toggles ignore.
-            // New logic: If there are classes, maybe shift+number changes class?
-            // Actually, let's keep it simple: 1-9 toggles ignore for detection #N
-            // And maybe Q, W, E for class assignment of the "highlighted" one?
-            
-            if (this.prediction?.detections && num <= this.prediction.detections.length) {
-                this.highlightedIndex = num - 1;
-                this.toggleIgnore(this.prediction.detections[num - 1]);
-                if (this.highlightTimeout) clearTimeout(this.highlightTimeout);
-                this.highlightTimeout = setTimeout(() => this.highlightedIndex = null, 800);
-                return;
-            }
+        // Granular Per-Detection Keyboard Actions
+        if (key === 'c' && !event.ctrlKey) {
+            this.markActive('correct');
+            return;
+        } else if (key === 'x') {
+            this.markActive('wrong');
+            return;
+        } else if (key === 's') {
+            this.markActive('skipped');
+            return;
         }
-
-        // Navigation & Batch
-        if (key === 'arrowleft' || key === 'a' || key === 'backspace') {
-            this.skip();
-        } else if (key === 'arrowright' || key === 'd' || key === 'enter') {
-            this.accept();
-        } else if (key === 'c' || key === 'y') {
+        
+        // Navigation & Global Actions
+        if (key === 'a' && !event.ctrlKey) {
             this.markAll(true);
-        } else if (key === 'x' || key === 'n') {
+        } else if (key === 'r') {
             this.markAll(false);
+        } else if (key === 'enter') {
+            this.accept();
+        } else if (key === 'arrowleft' || key === 'backspace') {
+            this.skip();
         } else if (key === 'm' || key === 'escape') {
             this.goBack();
         }
+    }
+
+    markActive(status: 'correct' | 'wrong' | 'skipped') {
+        if (!this.prediction || this.activeIndex === null) return;
+        const det = this.prediction.detections[this.activeIndex];
+        if (!det) return;
+        det.reviewStatus = status;
+
+        // Auto advance active index towards next review item logically
+        let next = this.activeIndex + 1;
+        while (next < this.prediction.detections.length) {
+            if (this.showDefaultClasses || !this.prediction.detections[next].isDefaultYolo) {
+                this.activeIndex = next;
+                break;
+            }
+            next++;
+        }
+        this.redraw();
+    }
+    
+    setActiveIndex(index: number) {
+        this.activeIndex = index;
+        this.redraw();
     }
 
     @HostListener('window:keyup', ['$event'])
@@ -640,7 +703,8 @@ export class ReviewComponent implements OnInit, OnDestroy {
             this.showToast('Saving & Refining...');
 
             const filename = (this.prediction as any).filename || 'unknown.jpg';
-            const validDetections = this.prediction.detections.filter((d: any) => !d.ignore);
+            // Validation: Only mathematically proven classifications are merged! Defaults & wrong mappings explicitly destroyed.
+            const validDetections = this.prediction.detections.filter((d: any) => d.reviewStatus === 'correct');
             
             // Mark as done in the queue
             if (this.current) {
@@ -725,11 +789,14 @@ export class ReviewComponent implements OnInit, OnDestroy {
      */
     markAll(correct: boolean) {
         if (this.prediction && !this.isLoading) {
-            this.prediction.detections.forEach((d: any) => d.ignore = !correct);
+            this.prediction.detections.forEach((d: any) => {
+                // Prevent hidden default YOLO items from being bulk-accepted
+                if (correct && d.isDefaultYolo && !this.showDefaultClasses) {
+                    return; 
+                }
+                d.reviewStatus = correct ? 'correct' : 'wrong';
+            });
             this.redraw();
-            // Both "Accept All" and "Reject All" natively trigger training propagation.
-            // If ALL are ignored, payload is [], creating a negative explicit sample.
-            this.accept();
         }
     }
 

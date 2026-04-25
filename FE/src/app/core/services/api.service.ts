@@ -11,8 +11,10 @@ export interface Detection {
     class: string;
     confidence: number;
     box: [number, number, number, number]; // x1, y1, x2, y2
-    ignore?: boolean;
+    ignore?: boolean; // legacy
     isManual?: boolean;
+    isDefaultYolo?: boolean;
+    reviewStatus?: 'pending' | 'correct' | 'wrong' | 'skipped';
 }
 
 export interface PredictionResult {
