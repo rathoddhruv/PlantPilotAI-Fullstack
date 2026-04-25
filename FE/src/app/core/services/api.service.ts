@@ -161,6 +161,14 @@ export class ApiService {
     }
 
     /**
+     * Creates and unconditionally persists a new user-defined annotation class 
+     * strictly inside to the underlying modeling file map.
+     */
+    addNewClass(name: string): Observable<any> {
+        return this.http.post(`${API_URL}/project/classes`, { name });
+    }
+
+    /**
      * Drops safely tracked staged variables that haven't been passed into formal training iteration yet.
      */
     flushStaged(): Observable<any> {

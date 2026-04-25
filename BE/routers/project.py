@@ -162,6 +162,17 @@ def get_classes():
             
     return {"classes": list(classes)}
 
+@router.post("/classes")
+def add_new_class(data: dict):
+    """Explicitly register a new user-defined class into the permanent taxonomy file."""
+    class_name = data.get("name")
+    if not class_name:
+        raise HTTPException(status_code=400, detail="Name required.")
+    
+    # Re-use ml_service file mapping engine to persist it instantly.
+    cid = ml_service._get_or_create_class_id(class_name)
+    return {"status": "success", "class_id": cid, "class_name": class_name}
+
 @router.get("/logs")
 def get_logs():
     """Returns the current training log buffer."""

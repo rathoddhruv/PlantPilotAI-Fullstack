@@ -66,6 +66,13 @@ export class ReviewComponent implements OnInit, OnDestroy {
     panStartX = 0;
     panStartY = 0;
 
+    // Moving Rect State
+    isDraggingRect = false;
+    draggedRectIndex: number | null = null;
+    lastMouseX = 0;
+    lastMouseY = 0;
+    hoverRectIndex: number | null = null;
+
     classColors = [
         '#f59e0b', // amber-500
         '#3b82f6', // blue-500
@@ -344,6 +351,19 @@ export class ReviewComponent implements OnInit, OnDestroy {
             y: (c.y - this.offsetY) / this.zoomScale
         };
     }
+
+    getHoveredRectIndex(coords: {x: number, y: number}): number | null {
+        if (!this.prediction) return null;
+        for (let i = this.prediction.detections.length - 1; i >= 0; i--) {
+            const det = this.prediction.detections[i];
+            if (det.ignore || !det.isManual) continue; 
+            const [x1, y1, x2, y2] = det.box;
+            if (coords.x >= x1 && coords.x <= x2 && coords.y >= y1 && coords.y <= y2) {
+                return i;
+            }
+        }
+        return null;
+    }
     
     onWheel(e: WheelEvent) {
         if(e.target !== this.canvas?.nativeElement) return;
@@ -370,6 +390,25 @@ export class ReviewComponent implements OnInit, OnDestroy {
             this.drawStartY = coords.y;
             this.currentDrawX = coords.x;
             this.currentDrawY = coords.y;
+            return;
+        }
+        
+        // Left click without space or ctrl
+        if (e.button === 0 && !this.isLoading && !this.isTestMode) {
+            const coords = this.getEventCoords(e);
+            const hitIndex = this.getHoveredRectIndex(coords);
+            if (hitIndex !== null && this.prediction) {
+                this.isDraggingRect = true;
+                this.draggedRectIndex = hitIndex;
+                this.lastMouseX = coords.x;
+                this.lastMouseY = coords.y;
+            } else if (this.zoomScale > 1) {
+                // Left click + drag on empty image area while zoomed = pan image
+                e.preventDefault();
+                this.isPanning = true;
+                this.panStartX = e.clientX;
+                this.panStartY = e.clientY;
+            }
         }
     }
 
@@ -392,11 +431,38 @@ export class ReviewComponent implements OnInit, OnDestroy {
             return;
         }
 
+        if (this.isDraggingRect && this.draggedRectIndex !== null && this.prediction) {
+            const coords = this.getEventCoords(e);
+            const dx = coords.x - this.lastMouseX;
+            const dy = coords.y - this.lastMouseY;
+            
+            const det = this.prediction.detections[this.draggedRectIndex];
+            det.box[0] += dx;
+            det.box[1] += dy;
+            det.box[2] += dx;
+            det.box[3] += dy;
+            
+            this.lastMouseX = coords.x;
+            this.lastMouseY = coords.y;
+            this.redraw();
+            return;
+        }
+
         if (this.isDrawing) {
             const coords = this.getEventCoords(e);
             this.currentDrawX = coords.x;
             this.currentDrawY = coords.y;
             this.redraw();
+            return;
+        }
+        
+        // Handle hovering updates
+        if (!this.isLoading && !this.isTestMode && !this.isPanning && !this.isDraggingRect && !this.isDrawing) {
+            const coords = this.getEventCoords(e);
+            const hitIndex = this.getHoveredRectIndex(coords);
+            if (this.hoverRectIndex !== hitIndex) {
+                this.hoverRectIndex = hitIndex;
+            }
         }
     }
 
@@ -429,6 +495,11 @@ export class ReviewComponent implements OnInit, OnDestroy {
             
             this.redraw();
         }
+        
+        if (this.isDraggingRect) {
+            this.isDraggingRect = false;
+            this.draggedRectIndex = null;
+        }
     }
 
     onMouseLeave(e: MouseEvent) {
@@ -437,6 +508,11 @@ export class ReviewComponent implements OnInit, OnDestroy {
             this.isDrawing = false;
             this.redraw();
         }
+        if (this.isDraggingRect) {
+            this.isDraggingRect = false;
+            this.draggedRectIndex = null;
+        }
+        this.hoverRectIndex = null;
     }
 
     onClassChange(det: any, event: any) {
@@ -454,17 +530,30 @@ export class ReviewComponent implements OnInit, OnDestroy {
     confirmNewClass() {
         const trimmed = this.newClassName.trim();
         if (trimmed) {
-            if (!this.classNames.includes(trimmed)) {
-                this.classNames.push(trimmed);
-            }
-            if (this.targetDetectionForNewClass) {
-                this.targetDetectionForNewClass.class = trimmed;
-                this.lastSelectedClass = trimmed;
-            }
+            this.isLoading = true;
+            this.api.addNewClass(trimmed).subscribe({
+                next: () => {
+                    this.isLoading = false;
+                    if (!this.classNames.includes(trimmed)) {
+                        this.classNames.push(trimmed);
+                    }
+                    if (this.targetDetectionForNewClass) {
+                        this.targetDetectionForNewClass.class = trimmed;
+                        this.lastSelectedClass = trimmed;
+                    }
+                    this.isAddingNewClass = false;
+                    this.targetDetectionForNewClass = null;
+                    this.redraw();
+                },
+                error: (err) => {
+                    this.isLoading = false;
+                    this.showToast('Failed to register class: ' + (err.error?.detail || err.message));
+                    this.cancelNewClass();
+                }
+            });
+        } else {
+            this.cancelNewClass();
         }
-        this.isAddingNewClass = false;
-        this.targetDetectionForNewClass = null;
-        this.redraw();
     }
 
     cancelNewClass() {
